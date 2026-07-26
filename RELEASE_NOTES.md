@@ -1,9 +1,9 @@
-# ControllerLab v1.0.1
+# ControllerLab v1.0.2
 
-## 文档截图更新
+## 最新运行截图更新
 
-- README 更新为更接近当前 Xbox 视觉层的实时可视化截图。
-- 新增 DualSense / DS5 实时可视化截图。
+- README 的 Xbox 实时可视化图替换为当前运行版本截图，包含最新的 LT/RT 历史曲线和诊断面板。
+- 保留 DualSense / DS5 实时可视化截图。
 
 ## 源码发布内容
 
