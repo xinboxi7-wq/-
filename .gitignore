@@ -1,0 +1,37 @@
+# Visual Studio and MSBuild output
+[Bb]in/
+[Oo]bj/
+.vs/
+[Dd]ebug/
+[Rr]elease/
+
+# Local build artifacts and diagnostics
+*.exe
+*.dll
+*.pdb
+*.cache
+*.tmp
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local application state
+logs/
+crash.log
+*.override.json
+
+# Generated visual audit output
+audit/
+audit-*/
+work/
+Tools/**/__pycache__/
+Tools/**/output/
+Tools/GenerateXboxDPadRegions/*.png
+Tools/GenerateXboxDPadRegions/*.json
+
+# Historical screenshots and preview animations kept only in the local workspace
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif

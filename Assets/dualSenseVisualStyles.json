@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "styles": [
+    { "id": "idle", "fillOpacity": 0, "strokeOpacity": 0, "strokePixels": 0, "glowOpacity": 0, "glowPixels": 0 },
+    { "id": "active", "fillOpacity": 0.12, "strokeOpacity": 0.92, "strokePixels": 1.10, "glowOpacity": 0.22, "glowPixels": 3.0 },
+    { "id": "analog", "fillOpacity": 0.24, "strokeOpacity": 0.95, "strokePixels": 1.25, "glowOpacity": 0.30, "glowPixels": 3.5 },
+    { "id": "touched", "fillOpacity": 0.05, "strokeOpacity": 0.58, "strokePixels": 1.1, "glowOpacity": 0.22, "glowPixels": 3.2 },
+    { "id": "pressed", "fillOpacity": 0.20, "strokeOpacity": 0.98, "strokePixels": 1.35, "glowOpacity": 0.34, "glowPixels": 3.8 }
+  ]
+}
