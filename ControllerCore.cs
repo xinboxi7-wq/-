@@ -772,6 +772,9 @@ namespace ControllerLab
         public int SampleCount;
         public double AverageX;
         public double AverageY;
+        // Magnitude of the averaged centre vector. This distinguishes a
+        // consistently off-centre stick from random sample noise.
+        public double CenterOffsetPercent;
         public double AverageDriftPercent;
         public double P95DriftPercent;
         public double MaximumDriftPercent;
@@ -782,6 +785,71 @@ namespace ControllerLab
         public StickDriftRating Rating;
         public bool IsValid;
         public string InvalidReason = string.Empty;
+        public JoystickHealthScore Health;
+    }
+
+    public enum JoystickHealthGrade
+    {
+        Pending,
+        Excellent,
+        Good,
+        Warning,
+        Critical
+    }
+
+    // A compact, UI-independent health summary built only from the completed
+    // stationary drift sample. It deliberately does not read XInput/HID.
+    public sealed class JoystickHealthScore
+    {
+        public int Score;
+        public JoystickHealthGrade Grade;
+        public double CenterOffsetPercent;
+        public double NoisePercent;
+        public double RequiredDeadzonePercent;
+    }
+
+    public static class JoystickHealthAnalyzer
+    {
+        public static JoystickHealthScore Evaluate(StickDriftResult result)
+        {
+            JoystickHealthScore health = new JoystickHealthScore();
+            if (result == null || !result.IsValid)
+            {
+                health.Grade = JoystickHealthGrade.Critical;
+                health.Score = 0;
+                return health;
+            }
+
+            health.CenterOffsetPercent = result.CenterOffsetPercent;
+            health.NoisePercent = result.StandardDeviation * 100.0;
+            health.RequiredDeadzonePercent = result.SuggestedDeadzonePercent;
+
+            // Centre bias is the primary signal. Noise and required deadzone
+            // reduce the score more gently so one isolated spike is not a
+            // health verdict (the drift analyser already gates unstable runs).
+            double centrePenalty = Math.Min(45.0, Math.Max(0.0, health.CenterOffsetPercent - 1.0) * 3.3);
+            double noisePenalty = Math.Min(25.0, health.NoisePercent * 7.0);
+            double deadzonePenalty = Math.Min(25.0, Math.Max(0.0, health.RequiredDeadzonePercent - 3.0) * 1.5);
+            health.Score = (int)Math.Round(Math.Max(0.0, Math.Min(100.0, 100.0 - centrePenalty - noisePenalty - deadzonePenalty)));
+            health.Grade = health.Score >= 90 ? JoystickHealthGrade.Excellent
+                : health.Score >= 75 ? JoystickHealthGrade.Good
+                : health.Score >= 45 ? JoystickHealthGrade.Warning
+                : JoystickHealthGrade.Critical;
+            return health;
+        }
+
+        public static string Label(JoystickHealthScore health)
+        {
+            if (health == null) return "Pending";
+            switch (health.Grade)
+            {
+                case JoystickHealthGrade.Excellent: return "Excellent";
+                case JoystickHealthGrade.Good: return "Good";
+                case JoystickHealthGrade.Warning: return "Warning";
+                case JoystickHealthGrade.Critical: return "Critical";
+                default: return "Pending";
+            }
+        }
     }
 
     public sealed class StickRangeResult
@@ -845,6 +913,7 @@ namespace ControllerLab
                 result.SampleCount = samples == null ? 0 : samples.Count;
                 result.IsValid = false;
                 result.Rating = StickDriftRating.Invalid;
+                result.Health = JoystickHealthAnalyzer.Evaluate(result);
                 result.InvalidReason = "采样不足，请重新检测";
                 return result;
             }
@@ -898,6 +967,7 @@ namespace ControllerLab
             result.SampleCount = count;
             result.AverageX = averageX;
             result.AverageY = averageY;
+            result.CenterOffsetPercent = Math.Sqrt(averageX * averageX + averageY * averageY) * 100.0;
             result.AverageDriftPercent = sumDistance / count * 100.0;
             result.P95DriftPercent = p95Percent;
             result.MaximumDriftPercent = maximum * 100.0;
@@ -911,6 +981,7 @@ namespace ControllerLab
                 result.Rating = StickDriftRating.Invalid;
                 result.InvalidReason = "检测期间摇杆可能被触碰，请重新检测";
             }
+            result.Health = JoystickHealthAnalyzer.Evaluate(result);
             return result;
         }
 
@@ -946,6 +1017,8 @@ namespace ControllerLab
     {
         private const int MaximumDriftSamples = 2048;
         private const int MaximumRangeSamples = 4096;
+        public const double SettlingDurationSeconds = 1.0;
+        public const double DriftSamplingDurationSeconds = 5.0;
         private readonly List<StickSample> leftSamples = new List<StickSample>();
         private readonly List<StickSample> rightSamples = new List<StickSample>();
         private readonly List<ControllerStickTestResult> completedDriftRuns = new List<ControllerStickTestResult>();
@@ -1011,8 +1084,8 @@ namespace ControllerLab
             completedDriftRuns.Clear();
             targetRuns = runThreeTimes ? 3 : 1;
             ReplaceCancellationSource();
-            samplingStartsAt = now.AddSeconds(1.0);
-            samplingEndsAt = samplingStartsAt.AddSeconds(3.0);
+            samplingStartsAt = now.AddSeconds(SettlingDurationSeconds);
+            samplingEndsAt = samplingStartsAt.AddSeconds(DriftSamplingDurationSeconds);
             Stage = StickTestStage.Settling;
             StatusMessage = targetRuns == 1 ? "请不要触碰摇杆，正在等待稳定（1 秒）" : "连续检测 1/3：请不要触碰摇杆，正在等待稳定（1 秒）";
         }
@@ -1109,7 +1182,7 @@ namespace ControllerLab
             {
                 if (now < samplingStartsAt) return;
                 Stage = StickTestStage.Sampling;
-                StatusMessage = targetRuns == 1 ? "正在采样，请继续不要触碰摇杆（3 秒）" : string.Format(CultureInfo.InvariantCulture, "连续检测 {0}/{1}：正在采样，请继续不要触碰摇杆（3 秒）", completedDriftRuns.Count + 1, targetRuns);
+                StatusMessage = targetRuns == 1 ? "正在采样，请继续不要触碰摇杆（5 秒）" : string.Format(CultureInfo.InvariantCulture, "连续检测 {0}/{1}：正在采样，请继续不要触碰摇杆（5 秒）", completedDriftRuns.Count + 1, targetRuns);
             }
             if (Stage == StickTestStage.Sampling)
             {
@@ -1129,10 +1202,10 @@ namespace ControllerLab
         {
             if (LastResult == null || LastResult.LeftStickDrift == null || LastResult.RightStickDrift == null) return "ControllerLab 摇杆检测\n尚无完整漂移检测结果。";
             return string.Format(CultureInfo.InvariantCulture,
-                "ControllerLab 摇杆检测\n设备：{0}\n左摇杆：{1}，P95 漂移 {2:0.0}%，建议死区 {3:0.0}%\n右摇杆：{4}，P95 漂移 {5:0.0}%，建议死区 {6:0.0}%",
+                "ControllerLab 摇杆检测\n设备：{0}\n左摇杆：{1}，健康 {2} {3}/100，P95 漂移 {4:0.0}%，建议死区 {5:0.0}%\n右摇杆：{6}，健康 {7} {8}/100，P95 漂移 {9:0.0}%，建议死区 {10:0.0}%",
                 LastResult.DeviceName,
-                RatingLabel(LastResult.LeftStickDrift), LastResult.LeftStickDrift.P95DriftPercent, LastResult.LeftStickDrift.SuggestedDeadzonePercent,
-                RatingLabel(LastResult.RightStickDrift), LastResult.RightStickDrift.P95DriftPercent, LastResult.RightStickDrift.SuggestedDeadzonePercent);
+                RatingLabel(LastResult.LeftStickDrift), JoystickHealthAnalyzer.Label(LastResult.LeftStickDrift.Health), LastResult.LeftStickDrift.Health == null ? 0 : LastResult.LeftStickDrift.Health.Score, LastResult.LeftStickDrift.P95DriftPercent, LastResult.LeftStickDrift.SuggestedDeadzonePercent,
+                RatingLabel(LastResult.RightStickDrift), JoystickHealthAnalyzer.Label(LastResult.RightStickDrift.Health), LastResult.RightStickDrift.Health == null ? 0 : LastResult.RightStickDrift.Health.Score, LastResult.RightStickDrift.P95DriftPercent, LastResult.RightStickDrift.SuggestedDeadzonePercent);
         }
 
         public static string RatingLabel(StickDriftResult result)
@@ -1192,8 +1265,8 @@ namespace ControllerLab
                 leftSamples.Clear();
                 rightSamples.Clear();
                 ReplaceCancellationSource();
-                samplingStartsAt = now.AddSeconds(1.0);
-                samplingEndsAt = samplingStartsAt.AddSeconds(3.0);
+                samplingStartsAt = now.AddSeconds(SettlingDurationSeconds);
+                samplingEndsAt = samplingStartsAt.AddSeconds(DriftSamplingDurationSeconds);
                 Stage = StickTestStage.Settling;
                 StatusMessage = string.Format(CultureInfo.InvariantCulture, "第 {0}/{1} 轮完成，请继续不要触碰摇杆，准备下一轮。", completedDriftRuns.Count, targetRuns);
                 return;
@@ -1470,18 +1543,22 @@ namespace ControllerLab
         {
             StickDriftResult centered = StickDriftAnalyzer.Analyze(StickSide.Left, BuildSamples(120, 0, 0));
             Require(centered.IsValid && centered.Rating == StickDriftRating.Normal && centered.SuggestedDeadzonePercent == StickDriftAnalyzer.MinimumDeadzonePercent, "Centered stick result failed.");
+            Require(centered.Health != null && centered.Health.Grade == JoystickHealthGrade.Excellent && centered.Health.Score == 100, "Centered health score failed.");
 
             StickDriftResult twoPercent = StickDriftAnalyzer.Analyze(StickSide.Left, BuildSamples(120, 0.02, 0));
             Require(twoPercent.IsValid && twoPercent.Rating == StickDriftRating.Normal && twoPercent.P95DriftPercent > 1.9 && twoPercent.P95DriftPercent < 2.1, "Two-percent drift result failed.");
 
             StickDriftResult fivePercent = StickDriftAnalyzer.Analyze(StickSide.Left, BuildSamples(120, 0.05, 0));
             Require(fivePercent.IsValid && fivePercent.Rating == StickDriftRating.SlightDrift, "Five-percent drift rating failed.");
+            Require(fivePercent.Health != null && fivePercent.Health.Grade == JoystickHealthGrade.Good, "Five-percent health score failed.");
 
             StickDriftResult tenPercent = StickDriftAnalyzer.Analyze(StickSide.Left, BuildSamples(120, 0.10, 0));
             Require(tenPercent.IsValid && tenPercent.Rating == StickDriftRating.NoticeableDrift, "Ten-percent drift rating failed.");
+            Require(tenPercent.Health != null && tenPercent.Health.Grade == JoystickHealthGrade.Warning, "Ten-percent health score failed.");
 
             StickDriftResult fifteenPercent = StickDriftAnalyzer.Analyze(StickSide.Left, BuildSamples(120, 0.15, 0));
             Require(fifteenPercent.IsValid && fifteenPercent.Rating == StickDriftRating.SevereDrift, "Fifteen-percent drift rating failed.");
+            Require(fifteenPercent.Health != null && fifteenPercent.Health.Grade == JoystickHealthGrade.Critical, "Fifteen-percent health score failed.");
 
             List<StickSample> singleSpike = BuildSamples(120, 0, 0);
             singleSpike[60] = new StickSample(DateTime.UtcNow, 0.70, 0);
@@ -1505,15 +1582,15 @@ namespace ControllerLab
             try
             {
                 engine.Start(xbox, testStart);
-                for (int i = 0; i < 390; i++) engine.Update(xbox, testStart.AddSeconds(1.01).AddMilliseconds(i * 8));
+                for (int i = 0; i < 800; i++) engine.Update(xbox, testStart.AddSeconds(1.01).AddMilliseconds(i * 8));
                 Require(engine.LastResult != null && engine.LastResult.ControllerType == ControllerType.Xbox, "Xbox must use the shared stick test engine.");
 
                 engine.Start(dualSense, testStart.AddSeconds(5));
-                for (int i = 0; i < 390; i++) engine.Update(dualSense, testStart.AddSeconds(6.01).AddMilliseconds(i * 8));
+                for (int i = 0; i < 800; i++) engine.Update(dualSense, testStart.AddSeconds(6.01).AddMilliseconds(i * 8));
                 Require(engine.LastResult != null && engine.LastResult.ControllerType == ControllerType.DualSense, "DualSense must use the shared stick test engine.");
 
                 engine.Start(xbox, true, testStart.AddSeconds(9));
-                for (int i = 0; i < 1600; i++) engine.Update(xbox, testStart.AddSeconds(10.01).AddMilliseconds(i * 8));
+                for (int i = 0; i < 2400; i++) engine.Update(xbox, testStart.AddSeconds(10.01).AddMilliseconds(i * 8));
                 Require(engine.CompletedRuns == 3 && engine.LeftStability.Status == "稳定" && engine.RightStability.Status == "稳定", "Three-run stability session failed.");
 
                 engine.Start(xbox, testStart.AddSeconds(25));
