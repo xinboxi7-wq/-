@@ -31,6 +31,10 @@ ControllerLab 是一个原生 Windows WPF 手柄检测与实时可视化工具�
 
 ![Xbox 实时可视化](docs/screenshots/xbox-visualizer.png)
 
+### DualSense / DS5 实时可视化
+
+![DualSense 实时可视化](docs/screenshots/dualsense-visualizer.png)
+
 ### 按键测试
 
 ![按键测试](docs/screenshots/input-test.png)
@@ -93,6 +97,6 @@ ControllerLab/
 
 ## GitHub Release
 
-建议首次标签使用 `v1.0.0`。本仓库默认发布**完整源码**；GitHub 在创建标签 Release 后会自动提供源码 ZIP/TAR 包。若要另行附带 Windows 可执行文件，请在 CI 或单独发布流程中构建，不要提交 `bin/`、`obj/` 或历史测试 EXE。
+本仓库默认发布**完整源码**；GitHub 在创建标签 Release 后会自动提供源码 ZIP/TAR 包。若要另行附带 Windows 可执行文件，请在 CI 或单独发布流程中构建，不要提交 `bin/`、`obj/` 或历史测试 EXE。
 
 详细发布内容见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。

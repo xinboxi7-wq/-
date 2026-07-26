@@ -1,8 +1,13 @@
-# ControllerLab v1.0.0
+# ControllerLab v1.0.1
 
-## 首个 GitHub 源码发布
+## 文档截图更新
 
-ControllerLab v1.0.0 提供 Windows WPF 手柄检测与可视化的完整 Visual Studio 工程源码。
+- README 更新为更接近当前 Xbox 视觉层的实时可视化截图。
+- 新增 DualSense / DS5 实时可视化截图。
+
+## 源码发布内容
+
+ControllerLab v1.0.1 提供 Windows WPF 手柄检测与可视化的完整 Visual Studio 工程源码。
 
 ### 包含内容
 
