@@ -513,7 +513,13 @@ namespace ControllerLab
         private readonly ControllerInputTestEngine inputTestEngine = new ControllerInputTestEngine();
         private readonly StickTriggerTestEngine stickTriggerTestEngine = new StickTriggerTestEngine();
         private readonly StickDriftTestEngine stickDriftTestEngine = new StickDriftTestEngine();
-        private readonly DispatcherTimer timer;
+        // The main dashboard used to run through a DispatcherTimer at 8 ms.
+        // On some systems that timer repeatedly exhausted Window Manager timer
+        // handles and terminated WPF with Win32Exception 0x80004005. Use the
+        // existing WPF render pulse instead: it owns no additional Win32 timer
+        // handle and keeps visual work bounded to the display refresh rate.
+        private bool renderLoopAttached;
+        private TimeSpan lastRenderFrame;
         private readonly ControllerVisual controllerVisual;
         private readonly DualSenseVisual dualSenseVisual;
         private readonly Grid controllerVisualHost;
@@ -820,13 +826,10 @@ namespace ControllerLab
                 }
             };
 
-            timer = new DispatcherTimer(DispatcherPriority.Render);
-            timer.Interval = TimeSpan.FromMilliseconds(8);
-            timer.Tick += OnTick;
             Loaded += delegate
             {
                 StartSampling();
-                timer.Start();
+                StartRenderLoop();
                 UpdateDeviceCardResponsiveLayout();
                 if (HasArgument("--ds5-calibrate")) Dispatcher.BeginInvoke(new Action(OpenDualSenseCalibration), DispatcherPriority.Background);
                 if (HasArgument("--xbox-calibrate")) Dispatcher.BeginInvoke(new Action(OpenXboxCalibration), DispatcherPriority.Background);
@@ -834,7 +837,7 @@ namespace ControllerLab
             };
             Closed += delegate
             {
-                timer.Stop();
+                StopRenderLoop();
                 StopSampling();
                 stickDriftTestEngine.Dispose();
                 if (!demoMode) SaveSettings();
@@ -843,6 +846,35 @@ namespace ControllerLab
                 sonyInput.Dispose();
                 input.Dispose();
             };
+        }
+
+        private void StartRenderLoop()
+        {
+            if (renderLoopAttached) return;
+            renderLoopAttached = true;
+            lastRenderFrame = TimeSpan.Zero;
+            CompositionTarget.Rendering += OnRendering;
+        }
+
+        private void StopRenderLoop()
+        {
+            if (!renderLoopAttached) return;
+            CompositionTarget.Rendering -= OnRendering;
+            renderLoopAttached = false;
+            lastRenderFrame = TimeSpan.Zero;
+        }
+
+        private void OnRendering(object sender, EventArgs e)
+        {
+            RenderingEventArgs rendering = e as RenderingEventArgs;
+            if (rendering == null) return;
+
+            // The monitor may render faster than the UI needs. A 60 Hz cap
+            // prevents expensive UI work from queueing while preserving smooth
+            // stick and trigger feedback.
+            if (lastRenderFrame != TimeSpan.Zero && rendering.RenderingTime - lastRenderFrame < TimeSpan.FromMilliseconds(16)) return;
+            lastRenderFrame = rendering.RenderingTime;
+            OnTick(this, EventArgs.Empty);
         }
 
         [StructLayout(LayoutKind.Sequential)]
