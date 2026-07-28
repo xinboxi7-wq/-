@@ -513,7 +513,13 @@ namespace ControllerLab
         private readonly ControllerInputTestEngine inputTestEngine = new ControllerInputTestEngine();
         private readonly StickTriggerTestEngine stickTriggerTestEngine = new StickTriggerTestEngine();
         private readonly StickDriftTestEngine stickDriftTestEngine = new StickDriftTestEngine();
-        private readonly DispatcherTimer timer;
+        // The main dashboard used to run through a DispatcherTimer at 8 ms.
+        // On some systems that timer repeatedly exhausted Window Manager timer
+        // handles and terminated WPF with Win32Exception 0x80004005. Use the
+        // existing WPF render pulse instead: it owns no additional Win32 timer
+        // handle and keeps visual work bounded to the display refresh rate.
+        private bool renderLoopAttached;
+        private TimeSpan lastRenderFrame;
         private readonly ControllerVisual controllerVisual;
         private readonly DualSenseVisual dualSenseVisual;
         private readonly Grid controllerVisualHost;
@@ -548,6 +554,8 @@ namespace ControllerLab
         private TextBlock rightStickAdviceText;
         private TextBlock leftTriggerCurrentText;
         private TextBlock rightTriggerCurrentText;
+        private TextBlock leftRealtimeTriggerLabel;
+        private TextBlock rightRealtimeTriggerLabel;
         private TextBlock triggerStatusText;
         private TextBlock footerStatus;
         private TextBlock diagnosticScoreText;
@@ -818,13 +826,10 @@ namespace ControllerLab
                 }
             };
 
-            timer = new DispatcherTimer(DispatcherPriority.Render);
-            timer.Interval = TimeSpan.FromMilliseconds(8);
-            timer.Tick += OnTick;
             Loaded += delegate
             {
                 StartSampling();
-                timer.Start();
+                StartRenderLoop();
                 UpdateDeviceCardResponsiveLayout();
                 if (HasArgument("--ds5-calibrate")) Dispatcher.BeginInvoke(new Action(OpenDualSenseCalibration), DispatcherPriority.Background);
                 if (HasArgument("--xbox-calibrate")) Dispatcher.BeginInvoke(new Action(OpenXboxCalibration), DispatcherPriority.Background);
@@ -832,7 +837,7 @@ namespace ControllerLab
             };
             Closed += delegate
             {
-                timer.Stop();
+                StopRenderLoop();
                 StopSampling();
                 stickDriftTestEngine.Dispose();
                 if (!demoMode) SaveSettings();
@@ -841,6 +846,35 @@ namespace ControllerLab
                 sonyInput.Dispose();
                 input.Dispose();
             };
+        }
+
+        private void StartRenderLoop()
+        {
+            if (renderLoopAttached) return;
+            renderLoopAttached = true;
+            lastRenderFrame = TimeSpan.Zero;
+            CompositionTarget.Rendering += OnRendering;
+        }
+
+        private void StopRenderLoop()
+        {
+            if (!renderLoopAttached) return;
+            CompositionTarget.Rendering -= OnRendering;
+            renderLoopAttached = false;
+            lastRenderFrame = TimeSpan.Zero;
+        }
+
+        private void OnRendering(object sender, EventArgs e)
+        {
+            RenderingEventArgs rendering = e as RenderingEventArgs;
+            if (rendering == null) return;
+
+            // The monitor may render faster than the UI needs. A 60 Hz cap
+            // prevents expensive UI work from queueing while preserving smooth
+            // stick and trigger feedback.
+            if (lastRenderFrame != TimeSpan.Zero && rendering.RenderingTime - lastRenderFrame < TimeSpan.FromMilliseconds(16)) return;
+            lastRenderFrame = rendering.RenderingTime;
+            OnTick(this, EventArgs.Empty);
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -1121,7 +1155,7 @@ namespace ControllerLab
             heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             StackPanel title = new StackPanel();
             title.Children.Add(LabVisualStyles.CreatePageTitle("摇杆检测"));
-            stickTestHintText = LabVisualStyles.CreateSecondaryText("松开摇杆后开始。系统会等待 1 秒，再连续采样 3 秒。");
+            stickTestHintText = LabVisualStyles.CreateSecondaryText("松开摇杆后开始。系统会等待 1 秒，再连续采样 5 秒。");
             stickTestHintText.FontSize = 14;
             stickTestHintText.Margin = new Thickness(0, 7, 0, 0);
             title.Children.Add(stickTestHintText);
@@ -2231,7 +2265,7 @@ namespace ControllerLab
             }
             else if (stickTestHintText != null && stickDriftTestEngine.Stage != StickTestStage.RangeRecording)
             {
-                stickTestHintText.Text = "松开两个摇杆后开始：等待 1 秒，再连续采样 3 秒。Xbox 与 DualSense 使用同一套检测规则。";
+                stickTestHintText.Text = "松开两个摇杆后开始：等待 1 秒，再连续采样 5 秒。Xbox 与 DualSense 使用同一套检测规则。";
             }
 
             bool connected = formalInput;
@@ -2270,6 +2304,13 @@ namespace ControllerLab
                 result.AverageX, result.AverageY, result.AverageDriftPercent, result.P95DriftPercent, result.MaximumDriftPercent, result.StandardDeviation * 100.0, result.AnomalySpikeCount,
                 result.SuggestedDeadzonePercent, StickDriftTestEngine.RatingLabel(result));
             if (!result.IsValid && !string.IsNullOrEmpty(result.InvalidReason)) text.Append("\n" + result.InvalidReason);
+            if (result.Health != null)
+            {
+                text.AppendFormat(CultureInfo.InvariantCulture,
+                    "\n\n摇杆健康\n{0} · {1}/100\n中心稳定性 {2:0.0}%\n噪声水平 {3:0.0}%\n所需死区 {4:0.0}%",
+                    JoystickHealthAnalyzer.Label(result.Health), result.Health.Score,
+                    result.Health.CenterOffsetPercent, result.Health.NoisePercent, result.Health.RequiredDeadzonePercent);
+            }
             text.AppendFormat(CultureInfo.InvariantCulture, "\n显示参考死区（用户）：{0:0.0}%", userVisualDeadzone * 100.0);
             if (stability != null)
             {
@@ -2296,7 +2337,8 @@ namespace ControllerLab
                 double current = Math.Sqrt(x * x + y * y) * 100.0;
                 return string.Format(CultureInfo.InvariantCulture, "当前偏移 {0:0.0}% · 等待检测", current);
             }
-            return string.Format(CultureInfo.InvariantCulture, "{0} · P95 {1:0.0}% · 建议死区 {2:0.0}%", StickDriftTestEngine.RatingLabel(result), result.P95DriftPercent, result.SuggestedDeadzonePercent);
+            string health = result.Health == null ? "Pending" : JoystickHealthAnalyzer.Label(result.Health) + " " + result.Health.Score.ToString(CultureInfo.InvariantCulture) + "/100";
+            return string.Format(CultureInfo.InvariantCulture, "{0} · {1} · P95 {2:0.0}% · 建议死区 {3:0.0}%", StickDriftTestEngine.RatingLabel(result), health, result.P95DriftPercent, result.SuggestedDeadzonePercent);
         }
 
         private static string FormatP95Runs(double[] values)
@@ -3417,13 +3459,15 @@ namespace ControllerLab
             card.Children.Add(divider);
 
             StackPanel left = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-            left.Children.Add(new TextBlock { Text = "左扳机", Foreground = Palette.MutedBrush, FontSize = 12 });
+            leftRealtimeTriggerLabel = new TextBlock { Text = "LT", Foreground = Palette.MutedBrush, FontSize = 12 };
+            left.Children.Add(leftRealtimeTriggerLabel);
             leftTriggerCurrentText = new TextBlock { Text = "0%", Foreground = Palette.BlueBrush, FontSize = 28, FontWeight = FontWeights.SemiBold };
             left.Children.Add(leftTriggerCurrentText);
             Grid.SetRow(left, 1);
             card.Children.Add(left);
             StackPanel right = new StackPanel { Margin = new Thickness(18, 8, 0, 0) };
-            right.Children.Add(new TextBlock { Text = "右扳机", Foreground = Palette.MutedBrush, FontSize = 12 });
+            rightRealtimeTriggerLabel = new TextBlock { Text = "RT", Foreground = Palette.MutedBrush, FontSize = 12 };
+            right.Children.Add(rightRealtimeTriggerLabel);
             rightTriggerCurrentText = new TextBlock { Text = "0%", Foreground = Palette.BlueBrush, FontSize = 28, FontWeight = FontWeights.SemiBold };
             right.Children.Add(rightTriggerCurrentText);
             Grid.SetColumn(right, 2);
@@ -4522,6 +4566,8 @@ namespace ControllerLab
                 rightTriggerChart.Label = family == ControllerFamily.PlayStation ? "R2" : "RT";
                 SetTextIfChanged(leftTriggerTitle, family == ControllerFamily.PlayStation ? "L2" : "LT");
                 SetTextIfChanged(rightTriggerTitle, family == ControllerFamily.PlayStation ? "R2" : "RT");
+                SetTextIfChanged(leftRealtimeTriggerLabel, family == ControllerFamily.PlayStation ? "L2" : "LT");
+                SetTextIfChanged(rightRealtimeTriggerLabel, family == ControllerFamily.PlayStation ? "R2" : "RT");
             }
         }
 
@@ -9431,7 +9477,9 @@ namespace ControllerLab
         private readonly List<TimedStickPoint> rangeTrail = new List<TimedStickPoint>();
         private readonly Typeface typeface = new Typeface(new FontFamily("Microsoft YaHei UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
         private const int MaximumTracePoints = 64;
+        private const int MaximumDriftTracePoints = 384;
         private static readonly TimeSpan TraceLifetime = TimeSpan.FromSeconds(1.0);
+        private static readonly TimeSpan DriftTraceLifetime = TimeSpan.FromSeconds(5.0);
 
         private sealed class TimedStickPoint
         {
@@ -9509,7 +9557,8 @@ namespace ControllerLab
             {
                 List<TimedStickPoint> trail = ActiveTrail();
                 trail.Add(new TimedStickPoint { Value = new Point(x, y), Timestamp = now });
-                while (trail.Count > MaximumTracePoints) trail.RemoveAt(0);
+                int maximum = traceMode == StickPlotTraceMode.Drift ? MaximumDriftTracePoints : MaximumTracePoints;
+                while (trail.Count > maximum) trail.RemoveAt(0);
             }
             InvalidateVisual();
         }
@@ -9547,16 +9596,16 @@ namespace ControllerLab
         private bool PurgeExpired(DateTime now)
         {
             bool changed = false;
-            changed |= PurgeTrail(passiveTrail, now);
-            changed |= PurgeTrail(driftTrail, now);
-            changed |= PurgeTrail(rangeTrail, now);
+            changed |= PurgeTrail(passiveTrail, now, TraceLifetime);
+            changed |= PurgeTrail(driftTrail, now, DriftTraceLifetime);
+            changed |= PurgeTrail(rangeTrail, now, TraceLifetime);
             return changed;
         }
 
-        private static bool PurgeTrail(List<TimedStickPoint> trail, DateTime now)
+        private static bool PurgeTrail(List<TimedStickPoint> trail, DateTime now, TimeSpan lifetime)
         {
             bool changed = false;
-            while (trail.Count > 0 && now - trail[0].Timestamp > TraceLifetime)
+            while (trail.Count > 0 && now - trail[0].Timestamp > lifetime)
             {
                 trail.RemoveAt(0);
                 changed = true;
