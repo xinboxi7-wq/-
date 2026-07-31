@@ -216,11 +216,17 @@ namespace ControllerLab
 
         public static DeadzoneRecommendation RecommendDeadzone(StickSide side, JoystickStationaryResult stationary)
         {
+            return RecommendDeadzone(side, stationary, 0.5);
+        }
+
+        public static DeadzoneRecommendation RecommendDeadzone(StickSide side, JoystickStationaryResult stationary, double safetyMarginPercent)
+        {
             DeadzoneRecommendation result = new DeadzoneRecommendation { StickSide = side };
             if (stationary == null || !stationary.IsValid) return result;
 
+            double configuredSafetyMargin = Clamp(safetyMarginPercent, 0.5, 5.0);
             double axisNoise = Math.Max(stationary.StandardDeviationXPercent, stationary.StandardDeviationYPercent);
-            double noiseMargin = Math.Max(0.5, axisNoise * 2.5 + stationary.NoiseLevelPercent * 0.35);
+            double noiseMargin = Math.Max(configuredSafetyMargin, axisNoise * 2.5 + stationary.NoiseLevelPercent * 0.35);
             double minimum = CeilingHalf(stationary.MaximumOffsetPercent + noiseMargin);
             double recommended = CeilingHalf(minimum + Math.Max(1.0, noiseMargin * 0.75));
             double stable = CeilingHalf(recommended + Math.Max(2.0, noiseMargin * 1.25));
@@ -234,8 +240,8 @@ namespace ControllerLab
             result.RecommendedDeadzonePercent = recommended;
             result.StableDeadzonePercent = stable;
             result.CircularDeadzonePercent = recommended;
-            result.AxialDeadzoneXPercent = Clamp(CeilingHalf(Math.Abs(stationary.AverageXPercent) + stationary.StandardDeviationXPercent * 2.5 + 0.5), JoystickAnalysisConfiguration.MinimumDeadzonePercent, JoystickAnalysisConfiguration.MaximumDeadzonePercent);
-            result.AxialDeadzoneYPercent = Clamp(CeilingHalf(Math.Abs(stationary.AverageYPercent) + stationary.StandardDeviationYPercent * 2.5 + 0.5), JoystickAnalysisConfiguration.MinimumDeadzonePercent, JoystickAnalysisConfiguration.MaximumDeadzonePercent);
+            result.AxialDeadzoneXPercent = Clamp(CeilingHalf(Math.Abs(stationary.AverageXPercent) + stationary.StandardDeviationXPercent * 2.5 + configuredSafetyMargin), JoystickAnalysisConfiguration.MinimumDeadzonePercent, JoystickAnalysisConfiguration.MaximumDeadzonePercent);
+            result.AxialDeadzoneYPercent = Clamp(CeilingHalf(Math.Abs(stationary.AverageYPercent) + stationary.StandardDeviationYPercent * 2.5 + configuredSafetyMargin), JoystickAnalysisConfiguration.MinimumDeadzonePercent, JoystickAnalysisConfiguration.MaximumDeadzonePercent);
             result.IsAbnormallyHigh = recommended >= JoystickAnalysisConfiguration.HighDeadzoneWarningPercent || stationary.MaximumOffsetPercent >= 12.0;
             if (result.IsAbnormallyHigh) result.Warning = "摇杆可能存在明显漂移，仅依靠增加死区无法彻底解决。";
             return result;

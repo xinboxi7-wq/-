@@ -273,6 +273,9 @@ namespace ControllerLab
         private readonly string root;
         private readonly string deviceDirectory;
         private readonly string customPatternsPath;
+        private double globalDefaultStrength = 0.40;
+        private double globalDefaultDurationSeconds = 5.0;
+        private double globalSafetyMaximum = 0.40;
 
         public static string DefaultDirectory { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ControllerLab", "rumble"); } }
 
@@ -287,6 +290,13 @@ namespace ControllerLab
         }
 
         public string RootDirectory { get { return root; } }
+
+        public void SetGlobalDefaults(double strength, double durationSeconds, double safetyMaximum)
+        {
+            globalSafetyMaximum = Clamp(safetyMaximum, 0.30, 0.70);
+            globalDefaultStrength = Clamp(strength, 0, Math.Min(0.40, globalSafetyMaximum));
+            globalDefaultDurationSeconds = Clamp(durationSeconds, 0.1, 5.0);
+        }
 
         public string GetStableDeviceKey(ControllerState state)
         {
@@ -398,11 +408,16 @@ namespace ControllerLab
             return path;
         }
 
-        private static RumbleDeviceProfile CreateDefaultProfile(ControllerState state, string key)
+        private RumbleDeviceProfile CreateDefaultProfile(ControllerState state, string key)
         {
             return new RumbleDeviceProfile
             {
                 DeviceKey = key,
+                DefaultLeftStrength = globalDefaultStrength,
+                DefaultRightStrength = globalDefaultStrength,
+                DefaultDurationSeconds = globalDefaultDurationSeconds,
+                LeftComfortMaximum = globalSafetyMaximum,
+                RightComfortMaximum = globalSafetyMaximum,
                 OutputConnectionMode = state == null ? "Unknown" : state.ConnectionTypeLabel,
                 UpdatedUtc = DateTime.UtcNow
             };

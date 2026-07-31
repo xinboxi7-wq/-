@@ -32,6 +32,7 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml" />
     <Reference Include="System.Xaml" />
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
@@ -56,6 +57,7 @@
     <Compile Include="DualSenseAdvancedPage.cs" />
     <Compile Include="XboxOverlay.cs" />
     <Compile Include="ControllerLabTheme.cs" />
+    <Compile Include="ProductExperience.cs" />
     <Compile Include="ControllerLab.cs" />
   </ItemGroup>
   <ItemGroup>

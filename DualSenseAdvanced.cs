@@ -87,10 +87,10 @@ namespace ControllerLab
 
     public sealed class DualSenseTouchpadAnalyzer
     {
-        private const int TrailCapacity = 1600;
+        private const int MaximumTrailCapacity = 1600;
         private readonly object sync = new object();
         private readonly Dictionary<int, TouchPointState> active = new Dictionary<int, TouchPointState>();
-        private readonly List<TouchTrailPoint> trail = new List<TouchTrailPoint>(TrailCapacity);
+        private readonly List<TouchTrailPoint> trail = new List<TouchTrailPoint>(MaximumTrailCapacity);
         private readonly bool[] covered = new bool[TouchpadAnalysisSnapshot.GridColumns * TouchpadAnalysisSnapshot.GridRows];
         private long lastReportSequence = -1;
         private DateTime recordingEndsUtc = DateTime.MinValue;
@@ -103,6 +103,13 @@ namespace ControllerLab
         private int maximumSimultaneousContacts;
         private TouchpadTestStage testStage = TouchpadTestStage.NotStarted;
         private bool stageStartSeen;
+
+        public int TrailCapacity { get; set; }
+
+        public DualSenseTouchpadAnalyzer()
+        {
+            TrailCapacity = MaximumTrailCapacity;
+        }
 
         public void Update(ControllerState controller, DateTime now)
         {
@@ -280,7 +287,8 @@ namespace ControllerLab
             }
             active[source.Id] = new TouchPointState { ContactId = source.Id, IsActive = true, X = x, Y = y, Speed = speed, Phase = phase, TimestampUtc = timestamp };
             trail.Add(new TouchTrailPoint { ContactId = source.Id, X = x, Y = y, TimestampUtc = timestamp, StartsStroke = !exists });
-            if (trail.Count > TrailCapacity) trail.RemoveRange(0, Math.Min(200, trail.Count - TrailCapacity));
+            int capacity = Math.Max(100, Math.Min(MaximumTrailCapacity, TrailCapacity));
+            if (trail.Count > capacity) trail.RemoveRange(0, Math.Min(200, trail.Count - capacity));
             int column = Math.Min(TouchpadAnalysisSnapshot.GridColumns - 1, (int)(x * TouchpadAnalysisSnapshot.GridColumns));
             int row = Math.Min(TouchpadAnalysisSnapshot.GridRows - 1, (int)(y * TouchpadAnalysisSnapshot.GridRows));
             covered[row * TouchpadAnalysisSnapshot.GridColumns + column] = true;
@@ -557,6 +565,16 @@ namespace ControllerLab
     {
         private readonly object sync = new object();
         private readonly Dictionary<string, DualSenseAdvancedSession> sessions = new Dictionary<string, DualSenseAdvancedSession>(StringComparer.OrdinalIgnoreCase);
+        private int trailCapacity = 1600;
+
+        public void SetTrailCapacity(int value)
+        {
+            trailCapacity = Math.Max(100, Math.Min(1600, value));
+            lock (sync)
+            {
+                foreach (DualSenseAdvancedSession session in sessions.Values) session.Touchpad.TrailCapacity = trailCapacity;
+            }
+        }
 
         public void Synchronize(ControllerState[] controllers, DualSenseMotionManager motionManager)
         {
@@ -611,6 +629,7 @@ namespace ControllerLab
                 if (!sessions.TryGetValue(deviceId, out session))
                 {
                     session = new DualSenseAdvancedSession();
+                    session.Touchpad.TrailCapacity = trailCapacity;
                     sessions[deviceId] = session;
                 }
                 return session;

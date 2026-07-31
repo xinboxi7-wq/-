@@ -54,6 +54,12 @@
 
 # 震动输出、时间线、配置与安全逻辑
 .\ControllerLab_Test.exe --rumble-selftest
+
+# UI 产品设置、报告比较、日志轮转与逻辑 DPI 布局
+.\ControllerLab_Test.exe --product-experience-selftest
+
+# 生成三张离线 WPF 渲染审计图
+.\ControllerLab_Test.exe --product-ui-render-audit
 ```
 
 当前没有 Publish Profile 或 `dotnet publish` 命令。用于本地测试的 EXE 由 `build.ps1` 创建；正式 Release 打包需另行记录步骤，且不得提交 `bin/`、`obj/` 或本地测试 EXE。
@@ -76,6 +82,8 @@
 | `--ds5-overlay-selftest` / `--xbox-overlay-selftest` | 逻辑舞台与区域边界 | 实机照片的肉眼对齐 |
 | `--trigger-chart-selftest` | 缓冲区与曲线逻辑 | 真实扳机噪声 |
 | `--rumble-selftest` | 0% 停止、左右隔离、25 Hz 时间线插值、完成/取消/页面/异常归零、快速替换、预设持久化、损坏配置和不支持设备门控，以及 USB/BT 报告 | 真实震感 / HID 写入兼容性 |
+| `--product-experience-selftest` | 设置范围、报告比较、日志轮转和 1080p/1440p/1600p 逻辑 DPI 矩阵 | 真实屏幕的 ClearType、跨显示器与触摸操作 |
+| `--product-ui-render-audit` | 实时监视、设置、历史报告在 125%/150% 等效尺寸的原生 WPF 离线渲染 | 真实显示器色彩与系统主题差异 |
 
 ## Xbox 实机回归
 

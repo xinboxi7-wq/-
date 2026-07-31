@@ -236,6 +236,29 @@ namespace ControllerLab
                 Console.WriteLine(ControllerHealthCheckSelfTest.Run());
                 return;
             }
+            if (HasArgument("--product-experience-selftest"))
+            {
+                Console.WriteLine(ProductExperienceSelfTest.Run());
+                return;
+            }
+            if (HasArgument("--product-ui-render-audit"))
+            {
+                try
+                {
+                    App auditApp = new App();
+                    MainWindow auditWindow = new MainWindow();
+                    string directory = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "audit", "product-ui-2026-07-31");
+                    Console.WriteLine(auditWindow.RenderProductUiAudit(directory));
+                    auditWindow.Close();
+                    auditApp.Shutdown();
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine(ex.ToString());
+                    Environment.ExitCode = 1;
+                }
+                return;
+            }
             if (HasArgument("--device-manager-selftest"))
             {
                 Console.WriteLine(ControllerCoreSelfTest.RunDeviceManagerSelfTest());
@@ -278,6 +301,7 @@ namespace ControllerLab
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            LabLogger.Info("Application", "ControllerLab starting.");
             RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.Default;
             DispatcherUnhandledException += delegate(object sender, DispatcherUnhandledExceptionEventArgs exception)
             {
@@ -295,14 +319,7 @@ namespace ControllerLab
         // 0xe0434352, which otherwise have no actionable call stack.
         internal static void RecordUnhandledException(string source, Exception exception)
         {
-            try
-            {
-                string directory = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ControllerLab", "logs");
-                Directory.CreateDirectory(directory);
-                string message = string.Format(CultureInfo.InvariantCulture, "[{0:O}] {1}\r\n{2}\r\n\r\n", DateTime.UtcNow, source, exception == null ? "Unknown managed exception" : exception.ToString());
-                File.AppendAllText(System.IO.Path.Combine(directory, "crash.log"), message, Encoding.UTF8);
-            }
-            catch { }
+            LabLogger.Error(source, "Unexpected managed exception.", exception);
         }
     }
 
@@ -624,6 +641,11 @@ namespace ControllerLab
         private UIElement motionPage;
         private UIElement rumblePage;
         private UIElement healthCheckPage;
+        private UIElement historyReportsPage;
+        private UIElement settingsPage;
+        private HistoryReportsPage historyReportsView;
+        private SettingsPage settingsView;
+        private ProductNoticeBanner noticeBanner;
         private int currentPage = 1;
         private bool controllerNavigationEnabled;
         private bool controllerNavigationComboLatched;
@@ -647,6 +669,9 @@ namespace ControllerLab
         private Button rumblePageButton;
         private Button healthCheckPageButton;
         private Button inputTestPageButton;
+        private Button historyPageButton;
+        private Button settingsPageButton;
+        private StackPanel primaryNavigation;
         private WrapPanel inputTestChipPanel;
         private TextBlock inputTestProgressText;
         private ProgressBar inputTestProgressBar;
@@ -746,6 +771,8 @@ namespace ControllerLab
         private double actualDisplayHz;
         private DateTime rateWindowStarted = DateTime.UtcNow;
         private bool lastConnected;
+        private readonly DateTime applicationStartedUtc = DateTime.UtcNow;
+        private DateTime capabilitiesReadyUtc = DateTime.MinValue;
         private volatile int selectedControllerIndex = -1;
         private ControllerFamily selectedControllerFamily = ControllerFamily.Auto;
         private ControllerFamily renderedControllerFamily = ControllerFamily.Xbox;
@@ -766,6 +793,9 @@ namespace ControllerLab
         private readonly ControllerHealthReportStore healthReportStore;
         private readonly ControllerHealthCheckViewModel healthCheckViewModel;
         private ControllerHealthCheckPage healthCheckView;
+        private readonly ControllerSettings productSettings;
+        private TimeSpan uiRefreshInterval = TimeSpan.FromMilliseconds(16);
+        private Button realtimeAdvancedButton;
 
         [DllImport("winmm.dll")]
         private static extern uint timeBeginPeriod(uint period);
@@ -792,7 +822,9 @@ namespace ControllerLab
         {
             sonyDemoMode = HasArgument("--sony-demo");
             multiDemoMode = HasArgument("--multi-demo");
-            demoMode = HasArgument("--demo") || sonyDemoMode || multiDemoMode;
+            demoMode = HasArgument("--demo") || HasArgument("--product-ui-render-audit") || sonyDemoMode || multiDemoMode;
+            productSettings = demoMode ? new ControllerSettings() : SettingsStore.Load();
+            productSettings.Normalize();
             input = new InputManager();
             sonyInput = new SonyInputManager();
             rumbleController = new ControllerRumbleController(input, sonyInput);
@@ -803,9 +835,10 @@ namespace ControllerLab
             deviceManager = new ControllerDeviceManager(input, sonyInput);
             motionManager = new DualSenseMotionManager();
             dualSenseAdvancedManager = new DualSenseAdvancedManager();
+            ApplyProductSettings(productSettings, false);
             Title = "手柄实验室";
-            MinWidth = 1120;
-            MinHeight = 760;
+            MinWidth = 1020;
+            MinHeight = 680;
             Rect workArea = SystemParameters.WorkArea;
             if (demoMode)
             {
@@ -815,11 +848,13 @@ namespace ControllerLab
             }
             else
             {
-                Width = Math.Min(1440, Math.Max(MinWidth, workArea.Width - 24));
-                Height = Math.Min(1024, Math.Max(MinHeight, workArea.Height - 24));
+                Width = Math.Min(productSettings.RememberWindowPosition && productSettings.HasWindowPlacement ? productSettings.WindowWidth : 1440, Math.Max(MinWidth, workArea.Width - 24));
+                Height = Math.Min(productSettings.RememberWindowPosition && productSettings.HasWindowPlacement ? productSettings.WindowHeight : 1024, Math.Max(MinHeight, workArea.Height - 24));
                 WindowStartupLocation = WindowStartupLocation.Manual;
-                Left = workArea.Left + (workArea.Width - Width) / 2.0;
-                Top = workArea.Top + (workArea.Height - Height) / 2.0;
+                double desiredLeft = productSettings.RememberWindowPosition && productSettings.HasWindowPlacement ? productSettings.WindowLeft : workArea.Left + (workArea.Width - Width) / 2.0;
+                double desiredTop = productSettings.RememberWindowPosition && productSettings.HasWindowPlacement ? productSettings.WindowTop : workArea.Top + (workArea.Height - Height) / 2.0;
+                Left = Math.Max(workArea.Left - Width + 160, Math.Min(workArea.Right - 160, desiredLeft));
+                Top = Math.Max(workArea.Top, Math.Min(workArea.Bottom - 80, desiredTop));
             }
             WindowStyle = WindowStyle.None;
             ResizeMode = ResizeMode.CanResize;
@@ -850,13 +885,14 @@ namespace ControllerLab
             stickTestRightPlot = new StickPlot(Palette.Blue);
             leftTriggerChart = new TriggerChart(Palette.Green, leftTriggerTelemetry);
             rightTriggerChart = new TriggerChart(Palette.Blue, rightTriggerTelemetry);
-            ControllerSettings saved = demoMode ? new ControllerSettings() : SettingsStore.Load();
+            ControllerSettings saved = productSettings;
             offsetLX = saved.OffsetLX;
             offsetLY = saved.OffsetLY;
             offsetRX = saved.OffsetRX;
             offsetRY = saved.OffsetRY;
             selectedControllerIndex = Math.Max(-1, Math.Min(3, saved.ControllerIndex));
             reducedMotion = saved.ReducedMotion;
+            uiRefreshInterval = TimeSpan.FromSeconds(1.0 / Math.Max(20, Math.Min(60, saved.UiRefreshRate)));
             connectionMethodOverride = NormalizeConnectionMethodOverride(saved.ConnectionMethodOverride);
             selectedControllerFamily = NormalizeControllerFamily(saved.ControllerFamily);
             if (sonyDemoMode) selectedControllerFamily = ControllerFamily.PlayStation;
@@ -867,6 +903,7 @@ namespace ControllerLab
             ApplyReducedMotion();
 
             Content = BuildRoot();
+            ApplyProductSettings(productSettings, true);
             leftDeadzone.ValueChanged += OnDeadzoneChanged;
             rightDeadzone.ValueChanged += OnDeadzoneChanged;
             SizeChanged += OnWindowSizeChanged;
@@ -889,15 +926,21 @@ namespace ControllerLab
             {
                 StartSampling();
                 StartRenderLoop();
+                int startupPage = !productSettings.AutoConnect || productSettings.StartupPage == "Devices" ? 0 : productSettings.StartupPage == "Health" ? 6 : 1;
+                ShowPage(startupPage);
+                UpdatePrimaryNavigationLayout();
                 UpdateDeviceCardResponsiveLayout();
                 if (HasArgument("--ds5-calibrate")) Dispatcher.BeginInvoke(new Action(OpenDualSenseCalibration), DispatcherPriority.Background);
                 if (HasArgument("--xbox-calibrate")) Dispatcher.BeginInvoke(new Action(OpenXboxCalibration), DispatcherPriority.Background);
                 if (HasArgument("--visualizer")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(1); }), DispatcherPriority.Background);
                 if (HasArgument("--rumble-page")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(5); }), DispatcherPriority.Background);
                 if (HasArgument("--health-check-page")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(6); }), DispatcherPriority.Background);
+                if (HasArgument("--history-page")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(7); }), DispatcherPriority.Background);
+                if (HasArgument("--settings-page")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(8); }), DispatcherPriority.Background);
             };
             Closed += delegate
             {
+                LabLogger.Info("Application", "ControllerLab closing; active output and page sessions will be stopped.");
                 StopRenderLoop();
                 StopSampling();
                 if (joystickTestPage != null) joystickTestPage.Cancel("应用退出，摇杆检测已取消");
@@ -939,7 +982,7 @@ namespace ControllerLab
             // The monitor may render faster than the UI needs. A 60 Hz cap
             // prevents expensive UI work from queueing while preserving smooth
             // stick and trigger feedback.
-            if (lastRenderFrame != TimeSpan.Zero && rendering.RenderingTime - lastRenderFrame < TimeSpan.FromMilliseconds(16)) return;
+            if (lastRenderFrame != TimeSpan.Zero && rendering.RenderingTime - lastRenderFrame < uiRefreshInterval) return;
             lastRenderFrame = rendering.RenderingTime;
             OnTick(this, EventArgs.Empty);
         }
@@ -1094,8 +1137,9 @@ namespace ControllerLab
             content.Children.Add(left);
 
             Grid right = BuildRightColumn();
-            Grid.SetColumn(right, 2);
-            content.Children.Add(right);
+            ScrollViewer rightScroll = new ScrollViewer { Content = right, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+            Grid.SetColumn(rightScroll, 2);
+            content.Children.Add(rightScroll);
             // Optional header metadata must not force the left star column wider
             // than the viewport before its responsive collapse logic executes.
             content.SizeChanged += delegate
@@ -1123,6 +1167,16 @@ namespace ControllerLab
             healthCheckView = new ControllerHealthCheckPage(healthCheckViewModel, healthReportStore);
             healthCheckPage = healthCheckView;
             healthCheckPage.Visibility = Visibility.Collapsed;
+            historyReportsView = new HistoryReportsPage(healthReportStore, delegate
+            {
+                healthCheckView.ResetForDeviceChange();
+                ShowPage(6);
+            });
+            historyReportsPage = historyReportsView;
+            historyReportsPage.Visibility = Visibility.Collapsed;
+            settingsView = new SettingsPage(productSettings, delegate(ControllerSettings value) { ApplyProductSettings(value, true); }, OpenApplicationDataDirectory, ClearAllHistoryReports);
+            settingsPage = settingsView;
+            settingsPage.Visibility = Visibility.Collapsed;
             pageHost = new Grid();
             pageHost.Children.Add(homePage);
             pageHost.Children.Add(visualizerPage);
@@ -1131,9 +1185,16 @@ namespace ControllerLab
             pageHost.Children.Add(motionPage);
             pageHost.Children.Add(rumblePage);
             pageHost.Children.Add(healthCheckPage);
+            pageHost.Children.Add(historyReportsPage);
+            pageHost.Children.Add(settingsPage);
             Grid.SetRow(pageHost, 1);
             root.Children.Add(pageHost);
             shellContent = pageHost;
+
+            noticeBanner = new ProductNoticeBanner();
+            Grid.SetRow(noticeBanner, 1);
+            Panel.SetZIndex(noticeBanner, 20);
+            root.Children.Add(noticeBanner);
 
             shellFooter = BuildFooter();
             Grid.SetRow(shellFooter, 2);
@@ -2048,9 +2109,14 @@ namespace ControllerLab
 
         private void ShowPage(int page)
         {
-            if (homePage == null || visualizerPage == null || inputTestPage == null || stickDriftTestPage == null || motionPage == null || rumblePage == null || healthCheckPage == null) return;
+            if (homePage == null || visualizerPage == null || inputTestPage == null || stickDriftTestPage == null || motionPage == null || rumblePage == null || healthCheckPage == null || historyReportsPage == null || settingsPage == null) return;
+            if (page == 4 && motionPageButton != null && motionPageButton.Visibility != Visibility.Visible)
+            {
+                if (noticeBanner != null) noticeBanner.Show(ProductNoticeKind.Info, "当前设备不提供 DualSense 专属检测", "连接支持触摸板或运动传感器的 DualSense 后，此入口会自动出现。", null, null);
+                page = 1;
+            }
             int previousPage = currentPage;
-            currentPage = Math.Max(0, Math.Min(6, page));
+            currentPage = Math.Max(0, Math.Min(8, page));
             page = currentPage;
             if (page != 3)
             {
@@ -2072,6 +2138,8 @@ namespace ControllerLab
             motionPage.Visibility = page == 4 ? Visibility.Visible : Visibility.Collapsed;
             rumblePage.Visibility = page == 5 ? Visibility.Visible : Visibility.Collapsed;
             healthCheckPage.Visibility = page == 6 ? Visibility.Visible : Visibility.Collapsed;
+            historyReportsPage.Visibility = page == 7 ? Visibility.Visible : Visibility.Collapsed;
+            settingsPage.Visibility = page == 8 ? Visibility.Visible : Visibility.Collapsed;
             UpdatePageButton(homePageButton, page == 0);
             UpdatePageButton(visualizerPageButton, page == 1);
             UpdatePageButton(inputTestPageButton, page == 2);
@@ -2079,7 +2147,11 @@ namespace ControllerLab
             UpdatePageButton(motionPageButton, page == 4);
             UpdatePageButton(rumblePageButton, page == 5);
             UpdatePageButton(healthCheckPageButton, page == 6);
-            UIElement visiblePage = page == 0 ? homePage : page == 1 ? visualizerPage : page == 2 ? inputTestPage : page == 3 ? stickDriftTestPage : page == 4 ? motionPage : page == 5 ? rumblePage : healthCheckPage;
+            UpdatePageButton(historyPageButton, page == 7);
+            UpdatePageButton(settingsPageButton, page == 8);
+            if (page == 7 && historyReportsView != null) historyReportsView.Refresh();
+            if (page == 8 && settingsView != null) settingsView.RefreshFromSettings();
+            UIElement visiblePage = page == 0 ? homePage : page == 1 ? visualizerPage : page == 2 ? inputTestPage : page == 3 ? stickDriftTestPage : page == 4 ? motionPage : page == 5 ? rumblePage : page == 6 ? healthCheckPage : page == 7 ? historyReportsPage : settingsPage;
             LabVisualStyles.FadeIn(visiblePage, reducedMotion);
             if (controllerNavigationEnabled)
             {
@@ -2131,10 +2203,10 @@ namespace ControllerLab
 
             ushort pressed = (ushort)(buttons & ~controllerNavigationPreviousButtons);
             DateTime now = DateTime.UtcNow;
-            if ((pressed & 0x0100) != 0) ShowControllerPage(currentPage == 0 ? 6 : currentPage - 1);
-            if ((pressed & 0x0200) != 0) ShowControllerPage(currentPage == 6 ? 0 : currentPage + 1);
+            if ((pressed & 0x0100) != 0) ShowControllerPage(AdjacentPrimaryPage(-1));
+            if ((pressed & 0x0200) != 0) ShowControllerPage(AdjacentPrimaryPage(1));
             if ((pressed & 0x1000) != 0) InvokeControllerFocusedAction();
-            if ((pressed & 0x2000) != 0) ShowControllerPage(0);
+            if ((pressed & 0x2000) != 0) ShowControllerPage(1);
 
             ushort dpad = (ushort)(buttons & 0x000F);
             ushort direction = dpad != 0 ? dpad : GetLeftStickNavigationDirection(state);
@@ -2189,11 +2261,23 @@ namespace ControllerLab
             ShowPage(page);
         }
 
+        private int AdjacentPrimaryPage(int direction)
+        {
+            List<int> pages = new List<int> { 1, 6, 3, 5 };
+            if (motionPageButton == null || motionPageButton.Visibility == Visibility.Visible) pages.Add(4);
+            pages.Add(7);
+            pages.Add(8);
+            int index = pages.IndexOf(currentPage);
+            if (index < 0) return direction >= 0 ? pages[0] : pages[pages.Count - 1];
+            index = (index + (direction >= 0 ? 1 : -1) + pages.Count) % pages.Count;
+            return pages[index];
+        }
+
         private UIElement CurrentPageRoot
         {
             get
             {
-                return currentPage == 0 ? homePage : currentPage == 1 ? visualizerPage : currentPage == 2 ? inputTestPage : currentPage == 3 ? stickDriftTestPage : currentPage == 4 ? motionPage : currentPage == 5 ? rumblePage : healthCheckPage;
+                return currentPage == 0 ? homePage : currentPage == 1 ? visualizerPage : currentPage == 2 ? inputTestPage : currentPage == 3 ? stickDriftTestPage : currentPage == 4 ? motionPage : currentPage == 5 ? rumblePage : currentPage == 6 ? healthCheckPage : currentPage == 7 ? historyReportsPage : settingsPage;
             }
         }
 
@@ -2222,6 +2306,8 @@ namespace ControllerLab
                 AddControllerNavigationTarget(motionPageButton);
                 AddControllerNavigationTarget(rumblePageButton);
                 AddControllerNavigationTarget(healthCheckPageButton);
+                AddControllerNavigationTarget(historyPageButton);
+                AddControllerNavigationTarget(settingsPageButton);
             }
             if (controllerNavigationTargets.Count == 0)
             {
@@ -2438,27 +2524,57 @@ namespace ControllerLab
 
             // Page routing is a direct mapping and must be independent of the
             // currently selected page action.
-            ShowPage(0);
+            ShowPage(1);
             input.Buttons = 0;
             HandleControllerNavigation(input);
             input.Buttons = 0x0200;
             HandleControllerNavigation(input);
-            if (currentPage != 1) throw new InvalidOperationException("RB did not advance to the next page.");
+            if (currentPage != 6) throw new InvalidOperationException("RB did not advance through the primary product navigation.");
             input.Buttons = 0;
             HandleControllerNavigation(input);
             input.Buttons = 0x0100;
             HandleControllerNavigation(input);
-            if (currentPage != 0) throw new InvalidOperationException("LB did not return to the previous page.");
+            if (currentPage != 1) throw new InvalidOperationException("LB did not return through the primary product navigation.");
             input.Buttons = 0;
             HandleControllerNavigation(input);
             ShowPage(2);
             input.Buttons = 0x2000;
             HandleControllerNavigation(input);
-            if (currentPage != 0) throw new InvalidOperationException("B did not return to the device home page.");
+            if (currentPage != 1) throw new InvalidOperationException("B did not return to the live monitor.");
 
             controllerNavigationEnabled = false;
             ClearControllerNavigationSelection();
             return "Controller navigation self-test passed: opt-in, D-pad selection, A action, page routing, and " + (scrollVerified ? "RT scrolling" : "scroll fallback") + ".";
+        }
+
+        internal string RenderProductUiAudit(string directory)
+        {
+            string root = System.IO.Path.GetFullPath(directory);
+            Directory.CreateDirectory(root);
+            RenderProductUiPage(System.IO.Path.Combine(root, "live-1920x1080-at-150.png"), 1, 1280, 720);
+            RenderProductUiPage(System.IO.Path.Combine(root, "settings-1920x1080-at-125.png"), 8, 1536, 864);
+            RenderProductUiPage(System.IO.Path.Combine(root, "history-2560x1600-at-125.png"), 7, 2048, 1280);
+            return "Product UI render audit created: " + root;
+        }
+
+        private void RenderProductUiPage(string path, int page, int width, int height)
+        {
+            Width = width;
+            Height = height;
+            bool savedReducedMotion = reducedMotion;
+            reducedMotion = true;
+            ShowPage(page);
+            FrameworkElement root = Content as FrameworkElement;
+            if (root == null) throw new InvalidOperationException("Window content is not renderable.");
+            root.Measure(new Size(width, height));
+            root.Arrange(new Rect(0, 0, width, height));
+            root.UpdateLayout();
+            RenderTargetBitmap bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(root);
+            PngBitmapEncoder encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using (FileStream stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None)) encoder.Save(stream);
+            reducedMotion = savedReducedMotion;
         }
 
         private static void UpdatePageButton(Button button, bool selected)
@@ -3239,24 +3355,34 @@ namespace ControllerLab
             brand.Children.Add(new TextBlock { Text = "手柄实验室", FontSize = 19, FontWeight = FontWeights.SemiBold, Foreground = Palette.TextBrush, Margin = new Thickness(10, 0, 0, 1), VerticalAlignment = VerticalAlignment.Center });
             title.Children.Add(brand);
 
-            StackPanel navigation = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            homePageButton = MakeButton("设备首页", false);
-            visualizerPageButton = MakeButton("实时可视化", false);
+            StackPanel navigation = primaryNavigation = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            homePageButton = MakeButton("设备选择", false);
+            visualizerPageButton = MakeButton("实时监视", false);
             inputTestPageButton = MakeButton("按键检测", false);
-            stickDriftPageButton = MakeButton("摇杆检测", false);
-            motionPageButton = MakeButton("DS 高级", false);
-            rumblePageButton = MakeButton("震动测试", false);
             healthCheckPageButton = MakeButton("完整检测", false);
-            Button[] pages = { homePageButton, visualizerPageButton, inputTestPageButton, stickDriftPageButton, motionPageButton, rumblePageButton, healthCheckPageButton };
+            stickDriftPageButton = MakeButton("摇杆检测", false);
+            rumblePageButton = MakeButton("震动测试", false);
+            motionPageButton = MakeButton("DualSense 高级", false);
+            motionPageButton.Visibility = sonyDemoMode || selectedControllerFamily == ControllerFamily.PlayStation ? Visibility.Visible : Visibility.Collapsed;
+            historyPageButton = MakeButton("历史报告", false);
+            settingsPageButton = MakeButton("设置", false);
+            Button[] pages = { visualizerPageButton, healthCheckPageButton, stickDriftPageButton, rumblePageButton, motionPageButton, historyPageButton, settingsPageButton };
             for (int i = 0; i < pages.Length; i++)
             {
-                pages[i].Width = 84;
+                pages[i].MinWidth = 72;
                 pages[i].Height = 34;
                 pages[i].FontSize = 12;
                 pages[i].Padding = new Thickness(8, 2, 8, 3);
                 pages[i].Margin = new Thickness(3, 0, 3, 0);
                 navigation.Children.Add(pages[i]);
             }
+            visualizerPageButton.ToolTip = "实时监视：查看手柄、摇杆和扳机的实时反馈";
+            healthCheckPageButton.ToolTip = "完整检测：按步骤完成一键手柄健康检测";
+            stickDriftPageButton.ToolTip = "摇杆检测：静止漂移、圆周和回中测试";
+            rumblePageButton.ToolTip = "震动测试：安全预设、校准与时间线";
+            motionPageButton.ToolTip = "DualSense 高级功能：触摸板、陀螺仪与能力状态";
+            historyPageButton.ToolTip = "历史报告：查看、导出和比较检测结果";
+            settingsPageButton.ToolTip = "设置：显示、检测、震动和本地数据";
             homePageButton.Click += delegate { ShowPage(0); };
             visualizerPageButton.Click += delegate { ShowPage(1); };
             inputTestPageButton.Click += delegate { ShowPage(2); };
@@ -3264,9 +3390,11 @@ namespace ControllerLab
             motionPageButton.Click += delegate { ShowPage(4); };
             rumblePageButton.Click += delegate { ShowPage(5); };
             healthCheckPageButton.Click += delegate { ShowPage(6); };
+            historyPageButton.Click += delegate { ShowPage(7); };
+            settingsPageButton.Click += delegate { ShowPage(8); };
             Grid.SetColumn(navigation, 1);
             title.Children.Add(navigation);
-            UpdatePageButton(homePageButton, true);
+            UpdatePageButton(visualizerPageButton, true);
 
             StackPanel buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             Button min = MakeWindowButton("\uE921", "最小化");
@@ -3315,7 +3443,28 @@ namespace ControllerLab
         {
             bool compact = ActualWidth < 1240;
             if (footerRightPanel != null) footerRightPanel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            UpdatePrimaryNavigationLayout();
             UpdateDeviceCardResponsiveLayout();
+        }
+
+        private void UpdatePrimaryNavigationLayout()
+        {
+            if (visualizerPageButton == null) return;
+            bool compact = ActualWidth > 0 && ActualWidth < 1360;
+            SetNavigationLabel(visualizerPageButton, compact ? "监视" : "实时监视", compact ? 62 : 82);
+            SetNavigationLabel(healthCheckPageButton, "完整检测", compact ? 76 : 88);
+            SetNavigationLabel(stickDriftPageButton, compact ? "摇杆" : "摇杆检测", compact ? 62 : 84);
+            SetNavigationLabel(rumblePageButton, compact ? "震动" : "震动测试", compact ? 62 : 84);
+            SetNavigationLabel(motionPageButton, compact ? "DualSense" : "DualSense 高级", compact ? 82 : 112);
+            SetNavigationLabel(historyPageButton, compact ? "报告" : "历史报告", compact ? 62 : 84);
+            SetNavigationLabel(settingsPageButton, "设置", 62);
+        }
+
+        private static void SetNavigationLabel(Button button, string text, double width)
+        {
+            if (button == null) return;
+            button.Content = text;
+            button.Width = width;
         }
 
         private void UpdateDeviceCardResponsiveLayout()
@@ -3644,6 +3793,7 @@ namespace ControllerLab
             if (healthCheckView != null) healthCheckView.ResetForDeviceChange();
             rumbleController.Stop("设备已切换，震动已停止");
             selectedDeviceId = deviceId;
+            if (string.IsNullOrEmpty(deviceId)) productSettings.AutoConnect = true;
             ClearTriggerHistory();
             diagnostics.Reset();
             inputTestEngine.Reset(currentControllerState);
@@ -3656,6 +3806,7 @@ namespace ControllerLab
             renderedInputTestSignature = null;
             if (controllerFamilySelectorButton != null) controllerFamilySelectorButton.Content = DeviceSelectionLabel();
             if (footerStatus != null) footerStatus.Text = string.IsNullOrEmpty(deviceId) ? "已启用自动设备选择。" : "已切换到 " + DeviceSelectionLabel() + "。";
+            if (!demoMode) SaveSettings();
         }
 
         private void AddControllerFamilyMenuItem(ContextMenu menu, string label, ControllerFamily family)
@@ -4045,8 +4196,10 @@ namespace ControllerLab
             actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
             actions.ColumnDefinitions.Add(new ColumnDefinition());
             actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+            actions.ColumnDefinitions.Add(new ColumnDefinition());
+            actions.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
             actions.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            guidedLaunchButton = MakeButton("自动体检", true);
+            guidedLaunchButton = MakeButton("快速体检", true);
             guidedLaunchButton.Click += delegate { BeginGuidedTest(); };
             actions.Children.Add(guidedLaunchButton);
             calibrateButton = MakeButton(demoMode ? "演示中" : "中心校准", false);
@@ -4054,7 +4207,12 @@ namespace ControllerLab
             calibrateButton.Click += StartCalibration;
             Grid.SetColumn(calibrateButton, 2);
             actions.Children.Add(calibrateButton);
-            Button more = MakeButton("更多", false);
+            Button inputTest = MakeButton("按键", false);
+            inputTest.ToolTip = "打开独立按键检测";
+            inputTest.Click += delegate { ShowPage(2); };
+            Grid.SetColumn(inputTest, 4);
+            actions.Children.Add(inputTest);
+            Button more = realtimeAdvancedButton = MakeButton("高级", false);
             more.MinWidth = 58;
             ContextMenu moreMenu = CreateDarkContextMenu(174);
             pauseHistoryMenuItem = MakeDarkMenuItem("暂停扳机曲线");
@@ -4088,7 +4246,7 @@ namespace ControllerLab
             moreMenu.Items.Add(resetAll);
             more.ContextMenu = moreMenu;
             more.Click += delegate { OpenContextMenu(more); };
-            Grid.SetColumn(more, 4);
+            Grid.SetColumn(more, 6);
             actions.Children.Add(more);
             Grid.SetRow(actions, 4);
             card.Children.Add(actions);
@@ -4479,6 +4637,8 @@ namespace ControllerLab
                 Style = primary ? LabVisualStyles.PrimaryButtonStyle : LabVisualStyles.SecondaryButtonStyle,
                 Tag = primary
             };
+            AutomationProperties.SetName(button, text);
+            AutomationProperties.SetHelpText(button, "按 Enter 或空格键执行");
             return button;
         }
 
@@ -4786,7 +4946,7 @@ namespace ControllerLab
             UpdateFamilyPresentation(state);
             UpdateRates(state);
             UpdateConnection(state);
-            UpdateVisuals(state);
+            if (state.Connected) UpdateVisuals(state);
             diagnostics.Update(state, demoMode ? 220.0 : actualSamplingHz, leftDeadzone.Value, rightDeadzone.Value);
             UpdateInputTestPage(selected);
             UpdateStickDriftTestPage(selected);
@@ -4827,7 +4987,15 @@ namespace ControllerLab
                 // A manually selected device disappeared. Fall back immediately to the
                 // first online device instead of leaving a stale visual on screen.
                 selectedDeviceId = null;
-                if (footerStatus != null && devices.Length > 0) footerStatus.Text = "选中的手柄已断开，已自动切换到其他在线设备。";
+                if (footerStatus != null && devices.Length > 0) footerStatus.Text = productSettings.AutoConnect ? "选中的手柄已断开，已自动切换到其他在线设备。" : "选中的手柄已断开，请在设备选择页重新选择。";
+            }
+            if (!demoMode && !productSettings.AutoConnect)
+            {
+                ControllerState waitingForSelection = ControllerStateAdapter.CreateDisconnected();
+                waitingForSelection.ControllerType = selectedControllerFamily == ControllerFamily.PlayStation ? ControllerType.DualSense : ControllerType.Xbox;
+                waitingForSelection.DeviceName = "请选择设备";
+                waitingForSelection.InputBackend = waitingForSelection.ControllerType == ControllerType.DualSense ? "Sony Native HID" : input.LibraryName;
+                return waitingForSelection;
             }
             if (devices.Length > 0) return devices[0];
             ControllerState disconnected = ControllerStateAdapter.CreateDisconnected();
@@ -4937,16 +5105,25 @@ namespace ControllerLab
         {
             if (state.Connected)
             {
+                if (!lastConnected)
+                {
+                    capabilitiesReadyUtc = DateTime.UtcNow.AddMilliseconds(650);
+                    if (noticeBanner != null) noticeBanner.Hide();
+                    LabLogger.Info("Device", "Controller connected; capability detection started.");
+                }
                 connectionDot.Fill = Palette.BlueBrush;
                 connectionText.Foreground = Palette.BlueBrush;
                 string touchStatus = state.Family == ControllerFamily.PlayStation
                     ? (state.TouchCoordinatesAvailable ? " · 触摸坐标可用" : " · 触摸坐标不可用（仅按压）")
                     : string.Empty;
+                bool detectingCapabilities = !demoMode && DateTime.UtcNow < capabilitiesReadyUtc;
                 string status = demoMode
                     ? "动态演示" + (sonyDemoMode ? " · 触摸坐标不可用（仅按压）" : string.Empty)
+                    : detectingCapabilities
+                        ? "能力检测中 · " + (state.Family == ControllerFamily.PlayStation ? "原生 HID" : "XInput")
                     : state.Family == ControllerFamily.PlayStation
-                        ? "已连接 · 原生 HID" + touchStatus
-                        : string.Format(CultureInfo.InvariantCulture, "已连接 · 玩家 {0}", state.Index + 1);
+                        ? "已就绪 · 原生 HID" + touchStatus
+                        : string.Format(CultureInfo.InvariantCulture, "已就绪 · 玩家 {0}", state.Index + 1);
                 SetTextIfChanged(connectionText, status);
                 UpdateConnectionMethod(state);
                 SetTextIfChanged(deviceMetaText, string.IsNullOrEmpty(state.InputBackend) ? input.LibraryName : state.InputBackend);
@@ -4956,12 +5133,25 @@ namespace ControllerLab
                 connectionDot.Fill = Palette.RedBrush;
                 connectionText.Foreground = Palette.RedBrush;
                 SetTextIfChanged(connectionText, selectedControllerIndex < 0
-                    ? "未检测到手柄"
+                    ? (DateTime.UtcNow - applicationStartedUtc).TotalSeconds < 2.0 ? "正在识别手柄" : lastConnected ? "已断开" : "未连接"
                     : string.Format(CultureInfo.InvariantCulture, "玩家 {0} 未连接", selectedControllerIndex + 1));
                 UpdateConnectionMethod(state);
                 SetTextIfChanged(deviceMetaText, renderedControllerFamily == ControllerFamily.PlayStation ? "Sony 原生 HID" : input.LibraryName);
-                if (lastConnected) footerStatus.Text = "请通过 USB 或蓝牙连接 Xbox 或索尼 DS 手柄，连接后会自动开始监测。";
+                if (lastConnected)
+                {
+                    rumbleController.Stop("设备已断开，震动输出已归零");
+                    if (stickDriftTestEngine.IsActive) stickDriftTestEngine.Cancel("设备已断开，检测已取消");
+                    if (joystickTestPage != null) joystickTestPage.Cancel("设备已断开，摇杆检测已取消");
+                    if (dualSenseAdvancedPage != null) dualSenseAdvancedPage.CancelForPageLeave();
+                    footerStatus.Text = "设备已断开。已停止震动和当前检测，最近一次报告仍保留。";
+                    if (noticeBanner != null) noticeBanner.Show(ProductNoticeKind.Warning, "设备已断开", "震动与当前检测已安全停止；重新连接后可从当前项目重新开始。", "设备选择", delegate { ShowPage(0); });
+                    LabLogger.Warning("Device", "Active controller disconnected; output and tests stopped.");
+                }
+                UpdateRealtimeStickCard(0, false, leftStickStatusText, leftStickAdviceText);
+                UpdateRealtimeStickCard(0, false, rightStickStatusText, rightStickAdviceText);
+                if (triggerStatusText != null) { triggerStatusText.Text = "未连接"; triggerStatusText.Foreground = Palette.RedBrush; }
             }
+            if (controllerVisualHost != null) controllerVisualHost.Opacity = state.Connected ? 1.0 : 0.38;
             lastConnected = state.Connected;
         }
 
@@ -5008,9 +5198,10 @@ namespace ControllerLab
             double leftMagnitude = Math.Min(1.0, Math.Sqrt(state.LeftNormalizedX * state.LeftNormalizedX + state.LeftNormalizedY * state.LeftNormalizedY));
             double rightMagnitude = Math.Min(1.0, Math.Sqrt(state.RightNormalizedX * state.RightNormalizedX + state.RightNormalizedY * state.RightNormalizedY));
             SetTextIfChanged(leftDriftX, string.Format(CultureInfo.InvariantCulture, "{0:0.0}%", leftMagnitude * 100.0));
-            SetTextIfChanged(leftDriftY, string.Format(CultureInfo.InvariantCulture, "X {0:0.000} · Y {1:0.000}", state.LeftNormalizedX, state.LeftNormalizedY));
+            string coordinateFormat = "0." + new string('0', Math.Max(1, Math.Min(3, productSettings.DecimalPlaces)));
+            SetTextIfChanged(leftDriftY, "X " + state.LeftNormalizedX.ToString(coordinateFormat, CultureInfo.InvariantCulture) + " · Y " + state.LeftNormalizedY.ToString(coordinateFormat, CultureInfo.InvariantCulture));
             SetTextIfChanged(rightDriftX, string.Format(CultureInfo.InvariantCulture, "{0:0.0}%", rightMagnitude * 100.0));
-            SetTextIfChanged(rightDriftY, string.Format(CultureInfo.InvariantCulture, "X {0:0.000} · Y {1:0.000}", state.RightNormalizedX, state.RightNormalizedY));
+            SetTextIfChanged(rightDriftY, "X " + state.RightNormalizedX.ToString(coordinateFormat, CultureInfo.InvariantCulture) + " · Y " + state.RightNormalizedY.ToString(coordinateFormat, CultureInfo.InvariantCulture));
             UpdateRealtimeStickCard(leftMagnitude, state.Connected, leftStickStatusText, leftStickAdviceText);
             UpdateRealtimeStickCard(rightMagnitude, state.Connected, rightStickStatusText, rightStickAdviceText);
 
@@ -5073,6 +5264,12 @@ namespace ControllerLab
             renderedControllerFamily = family;
             if (controllerVisual != null) controllerVisual.Visibility = family == ControllerFamily.Xbox ? Visibility.Visible : Visibility.Collapsed;
             if (dualSenseVisual != null) dualSenseVisual.Visibility = family == ControllerFamily.PlayStation ? Visibility.Visible : Visibility.Collapsed;
+            if (motionPageButton != null)
+            {
+                bool showDualSense = family == ControllerFamily.PlayStation;
+                motionPageButton.Visibility = showDualSense ? Visibility.Visible : Visibility.Collapsed;
+                if (!showDualSense && state.Connected && currentPage == 4) ShowPage(1);
+            }
             if (deviceNameText != null) SetTextIfChanged(deviceNameText, state.Connected ? state.DeviceName : (family == ControllerFamily.PlayStation ? "索尼 DS 手柄实验室" : "Xbox 手柄实验室"));
             if (deviceLogoText != null)
             {
@@ -5291,23 +5488,93 @@ namespace ControllerLab
             if (target != null && target.Text != value) target.Text = value;
         }
 
+        private void OpenApplicationDataDirectory()
+        {
+            try
+            {
+                Directory.CreateDirectory(SettingsStore.ApplicationDataDirectory);
+                Process.Start("explorer.exe", "\"" + SettingsStore.ApplicationDataDirectory + "\"");
+            }
+            catch (Exception ex)
+            {
+                LabLogger.Error("Settings", "Unable to open application data directory.", ex);
+                if (noticeBanner != null) noticeBanner.Show(ProductNoticeKind.Error, "无法打开数据目录", "请检查 Windows 文件资源管理器是否可用，然后重试。", "重试", delegate { OpenApplicationDataDirectory(); });
+            }
+        }
+
+        private void ClearAllHistoryReports()
+        {
+            List<ControllerHealthReport> reports = healthReportStore.LoadAll();
+            if (reports.Count == 0)
+            {
+                if (noticeBanner != null) noticeBanner.Show(ProductNoticeKind.Info, "没有历史报告", "当前没有需要清除的本地检测报告。", null, null);
+                return;
+            }
+            if (MessageBox.Show("确定清除全部 " + reports.Count.ToString(CultureInfo.InvariantCulture) + " 份历史报告吗？此操作无法撤销。", "清除历史报告", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
+            try
+            {
+                for (int i = 0; i < reports.Count; i++) healthReportStore.Delete(reports[i].ReportId);
+                if (historyReportsView != null) historyReportsView.Refresh();
+                if (noticeBanner != null) noticeBanner.Show(ProductNoticeKind.Success, "历史报告已清除", "已删除本机保存的检测报告。", null, null);
+                LabLogger.Info("History", "All local reports cleared.");
+            }
+            catch (Exception ex)
+            {
+                LabLogger.Error("History", "Unable to clear all reports.", ex);
+                if (noticeBanner != null) noticeBanner.Show(ProductNoticeKind.Error, "清除失败", "部分报告可能仍被其他程序占用，请关闭相关文件后重试。", "重试", delegate { ClearAllHistoryReports(); });
+            }
+        }
+
+        private void ApplyProductSettings(ControllerSettings settings, bool refreshVisuals)
+        {
+            if (settings == null) return;
+            settings.Normalize();
+            reducedMotion = settings.ReducedMotion;
+            uiRefreshInterval = TimeSpan.FromSeconds(1.0 / settings.UiRefreshRate);
+            joystickTestViewModel.StationarySampleDurationSeconds = settings.StationarySampleDuration;
+            joystickTestViewModel.DeadzoneSafetyMarginPercent = settings.DeadzoneSafetyMarginPercent;
+            healthReportStore.SaveEnabled = settings.SaveHistory;
+            dualSenseAdvancedManager.SetTrailCapacity(settings.TrailLength);
+            rumbleSettingsStore.SetGlobalDefaults(settings.DefaultRumbleStrengthPercent / 100.0, settings.DefaultRumbleDurationSeconds, settings.RumbleSafetyMaximumPercent / 100.0);
+            if (!refreshVisuals) return;
+            if (reducedMotionCheck != null) reducedMotionCheck.IsChecked = reducedMotion;
+            if (leftDriftY != null) leftDriftY.Visibility = settings.ShowAdvancedData ? Visibility.Visible : Visibility.Collapsed;
+            if (rightDriftY != null) rightDriftY.Visibility = settings.ShowAdvancedData ? Visibility.Visible : Visibility.Collapsed;
+            if (realtimeAdvancedButton != null) realtimeAdvancedButton.Visibility = settings.ShowAdvancedData ? Visibility.Visible : Visibility.Collapsed;
+            if (demoModeButton != null && !demoMode) demoModeButton.Visibility = settings.ShowAdvancedData ? Visibility.Visible : Visibility.Collapsed;
+            ApplyReducedMotion();
+            UpdateDeviceCardResponsiveLayout();
+            if (noticeBanner != null && IsLoaded) noticeBanner.Show(ProductNoticeKind.Success, "设置已应用", "界面显示与测试默认值已经更新。", null, null);
+        }
+
         private void SaveSettings()
         {
-            SettingsStore.Save(new ControllerSettings
+            productSettings.OffsetLX = offsetLX;
+            productSettings.OffsetLY = offsetLY;
+            productSettings.OffsetRX = offsetRX;
+            productSettings.OffsetRY = offsetRY;
+            productSettings.LeftDeadzone = leftDeadzone.Value;
+            productSettings.RightDeadzone = rightDeadzone.Value;
+            productSettings.ControllerIndex = selectedControllerIndex;
+            productSettings.ReducedMotion = reducedMotion;
+            productSettings.AnimationsEnabled = !reducedMotion;
+            productSettings.ConnectionMethodOverride = connectionMethodOverride;
+            productSettings.WiredUsbRoute = input.WiredUsbRoute;
+            productSettings.ReceiverUsbRoute = input.ReceiverUsbRoute;
+            productSettings.ControllerFamily = selectedControllerFamily.ToString();
+            if (productSettings.RememberWindowPosition)
             {
-                OffsetLX = offsetLX,
-                OffsetLY = offsetLY,
-                OffsetRX = offsetRX,
-                OffsetRY = offsetRY,
-                LeftDeadzone = leftDeadzone.Value,
-                RightDeadzone = rightDeadzone.Value,
-                ControllerIndex = selectedControllerIndex,
-                ReducedMotion = reducedMotion,
-                ConnectionMethodOverride = connectionMethodOverride,
-                WiredUsbRoute = input.WiredUsbRoute,
-                ReceiverUsbRoute = input.ReceiverUsbRoute
-                ,ControllerFamily = selectedControllerFamily.ToString()
-            });
+                Rect bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, ActualWidth, ActualHeight) : RestoreBounds;
+                if (bounds.Width >= MinWidth && bounds.Height >= MinHeight)
+                {
+                    productSettings.HasWindowPlacement = true;
+                    productSettings.WindowLeft = bounds.Left;
+                    productSettings.WindowTop = bounds.Top;
+                    productSettings.WindowWidth = bounds.Width;
+                    productSettings.WindowHeight = bounds.Height;
+                }
+            }
+            SettingsStore.Save(productSettings);
         }
     }
 
@@ -5574,20 +5841,84 @@ namespace ControllerLab
         public string WiredUsbRoute;
         public string ReceiverUsbRoute;
         public string ControllerFamily = "Auto";
+        public string Language = "zh-CN";
+        public string StartupPage = "Monitor";
+        public bool AutoConnect = true;
+        public bool RememberWindowPosition = true;
+        public bool AnimationsEnabled = true;
+        public bool HasWindowPlacement;
+        public double WindowLeft;
+        public double WindowTop;
+        public double WindowWidth = 1440;
+        public double WindowHeight = 1024;
+        public int DecimalPlaces = 3;
+        public int TrailLength = 900;
+        public int UiRefreshRate = 60;
+        public bool ShowAdvancedData;
+        public double StationarySampleDuration = 5.0;
+        public double DeadzoneSafetyMarginPercent = 0.5;
+        public bool SaveHistory = true;
+        public double DefaultRumbleStrengthPercent = 40.0;
+        public double DefaultRumbleDurationSeconds = 5.0;
+        public double RumbleSafetyMaximumPercent = 40.0;
+
+        public void Normalize()
+        {
+            if (Language != "zh-CN") Language = "zh-CN";
+            if (StartupPage != "Health" && StartupPage != "Devices") StartupPage = "Monitor";
+            DecimalPlaces = Math.Max(1, Math.Min(3, DecimalPlaces));
+            TrailLength = Math.Max(100, Math.Min(1600, TrailLength));
+            UiRefreshRate = Math.Max(20, Math.Min(60, UiRefreshRate));
+            StationarySampleDuration = Math.Max(3.0, Math.Min(10.0, StationarySampleDuration));
+            DeadzoneSafetyMarginPercent = Math.Max(0.5, Math.Min(5.0, DeadzoneSafetyMarginPercent));
+            DefaultRumbleDurationSeconds = Math.Max(0.5, Math.Min(5.0, DefaultRumbleDurationSeconds));
+            RumbleSafetyMaximumPercent = Math.Max(30.0, Math.Min(70.0, RumbleSafetyMaximumPercent));
+            DefaultRumbleStrengthPercent = Math.Max(0, Math.Min(Math.Min(40.0, RumbleSafetyMaximumPercent), DefaultRumbleStrengthPercent));
+            WindowWidth = Math.Max(1020, Math.Min(3840, WindowWidth));
+            WindowHeight = Math.Max(680, Math.Min(2160, WindowHeight));
+            AnimationsEnabled = !ReducedMotion;
+        }
+
+        public void CopyProductSettingsFrom(ControllerSettings source)
+        {
+            if (source == null) return;
+            Language = source.Language;
+            StartupPage = source.StartupPage;
+            AutoConnect = source.AutoConnect;
+            RememberWindowPosition = source.RememberWindowPosition;
+            AnimationsEnabled = source.AnimationsEnabled;
+            ReducedMotion = source.ReducedMotion;
+            DecimalPlaces = source.DecimalPlaces;
+            TrailLength = source.TrailLength;
+            UiRefreshRate = source.UiRefreshRate;
+            ShowAdvancedData = source.ShowAdvancedData;
+            StationarySampleDuration = source.StationarySampleDuration;
+            DeadzoneSafetyMarginPercent = source.DeadzoneSafetyMarginPercent;
+            SaveHistory = source.SaveHistory;
+            DefaultRumbleStrengthPercent = source.DefaultRumbleStrengthPercent;
+            DefaultRumbleDurationSeconds = source.DefaultRumbleDurationSeconds;
+            RumbleSafetyMaximumPercent = source.RumbleSafetyMaximumPercent;
+            Normalize();
+        }
     }
 
     public static class SettingsStore
     {
-        private static readonly string DirectoryPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XboxControllerLab");
+        private static readonly string DirectoryPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ControllerLab");
         private static readonly string FilePath = System.IO.Path.Combine(DirectoryPath, "settings.ini");
+        private static readonly string LegacyFilePath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XboxControllerLab", "settings.ini");
+
+        public static string ApplicationDataDirectory { get { return DirectoryPath; } }
+        public static string SettingsFilePath { get { return FilePath; } }
 
         public static ControllerSettings Load()
         {
             ControllerSettings settings = new ControllerSettings();
             try
             {
-                if (!File.Exists(FilePath)) return settings;
-                string[] lines = File.ReadAllLines(FilePath);
+                string sourcePath = File.Exists(FilePath) ? FilePath : LegacyFilePath;
+                if (!File.Exists(sourcePath)) { settings.Normalize(); return settings; }
+                string[] lines = File.ReadAllLines(sourcePath);
                 for (int i = 0; i < lines.Length; i++)
                 {
                     int split = lines[i].IndexOf('=');
@@ -5626,6 +5957,19 @@ namespace ControllerLab
                         settings.ControllerFamily = raw;
                         continue;
                     }
+                    if (key == "language") { settings.Language = raw; continue; }
+                    if (key == "startupPage") { settings.StartupPage = raw; continue; }
+                    bool boolean;
+                    if (key == "autoConnect" && bool.TryParse(raw, out boolean)) { settings.AutoConnect = boolean; continue; }
+                    if (key == "rememberWindowPosition" && bool.TryParse(raw, out boolean)) { settings.RememberWindowPosition = boolean; continue; }
+                    if (key == "animationsEnabled" && bool.TryParse(raw, out boolean)) { settings.AnimationsEnabled = boolean; settings.ReducedMotion = !boolean; continue; }
+                    if (key == "hasWindowPlacement" && bool.TryParse(raw, out boolean)) { settings.HasWindowPlacement = boolean; continue; }
+                    if (key == "showAdvancedData" && bool.TryParse(raw, out boolean)) { settings.ShowAdvancedData = boolean; continue; }
+                    if (key == "saveHistory" && bool.TryParse(raw, out boolean)) { settings.SaveHistory = boolean; continue; }
+                    int integer;
+                    if (key == "decimalPlaces" && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out integer)) { settings.DecimalPlaces = integer; continue; }
+                    if (key == "trailLength" && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out integer)) { settings.TrailLength = integer; continue; }
+                    if (key == "uiRefreshRate" && int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out integer)) { settings.UiRefreshRate = integer; continue; }
                     double value;
                     if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value)) continue;
                     if (key == "offsetLX") settings.OffsetLX = ClampOffset(value);
@@ -5634,12 +5978,23 @@ namespace ControllerLab
                     else if (key == "offsetRY") settings.OffsetRY = ClampOffset(value);
                     else if (key == "leftDeadzone") settings.LeftDeadzone = ClampDeadzone(value);
                     else if (key == "rightDeadzone") settings.RightDeadzone = ClampDeadzone(value);
+                    else if (key == "windowLeft") settings.WindowLeft = value;
+                    else if (key == "windowTop") settings.WindowTop = value;
+                    else if (key == "windowWidth") settings.WindowWidth = value;
+                    else if (key == "windowHeight") settings.WindowHeight = value;
+                    else if (key == "stationarySampleDuration") settings.StationarySampleDuration = value;
+                    else if (key == "deadzoneSafetyMarginPercent") settings.DeadzoneSafetyMarginPercent = value;
+                    else if (key == "defaultRumbleStrengthPercent") settings.DefaultRumbleStrengthPercent = value;
+                    else if (key == "defaultRumbleDurationSeconds") settings.DefaultRumbleDurationSeconds = value;
+                    else if (key == "rumbleSafetyMaximumPercent") settings.RumbleSafetyMaximumPercent = value;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                LabLogger.Warning("Settings", "Settings file could not be read; defaults were used. " + ex.GetType().Name);
                 return new ControllerSettings();
             }
+            settings.Normalize();
             return settings;
         }
 
@@ -5647,10 +6002,12 @@ namespace ControllerLab
         {
             try
             {
+                if (settings == null) return;
+                settings.Normalize();
                 Directory.CreateDirectory(DirectoryPath);
                 string[] lines =
                 {
-                    "version=4",
+                    "version=5",
                     "offsetLX=" + ClampOffset(settings.OffsetLX).ToString("0.###", CultureInfo.InvariantCulture),
                     "offsetLY=" + ClampOffset(settings.OffsetLY).ToString("0.###", CultureInfo.InvariantCulture),
                     "offsetRX=" + ClampOffset(settings.OffsetRX).ToString("0.###", CultureInfo.InvariantCulture),
@@ -5662,12 +6019,33 @@ namespace ControllerLab
                     "connectionMethodOverride=" + (settings.ConnectionMethodOverride ?? "自动"),
                     "wiredUsbRoute=" + (settings.WiredUsbRoute ?? string.Empty),
                     "receiverUsbRoute=" + (settings.ReceiverUsbRoute ?? string.Empty),
-                    "controllerFamily=" + (settings.ControllerFamily ?? "Auto")
+                    "controllerFamily=" + (settings.ControllerFamily ?? "Auto"),
+                    "language=" + (settings.Language ?? "zh-CN"),
+                    "startupPage=" + (settings.StartupPage ?? "Monitor"),
+                    "autoConnect=" + settings.AutoConnect.ToString(CultureInfo.InvariantCulture),
+                    "rememberWindowPosition=" + settings.RememberWindowPosition.ToString(CultureInfo.InvariantCulture),
+                    "animationsEnabled=" + settings.AnimationsEnabled.ToString(CultureInfo.InvariantCulture),
+                    "hasWindowPlacement=" + settings.HasWindowPlacement.ToString(CultureInfo.InvariantCulture),
+                    "windowLeft=" + settings.WindowLeft.ToString("0.###", CultureInfo.InvariantCulture),
+                    "windowTop=" + settings.WindowTop.ToString("0.###", CultureInfo.InvariantCulture),
+                    "windowWidth=" + settings.WindowWidth.ToString("0.###", CultureInfo.InvariantCulture),
+                    "windowHeight=" + settings.WindowHeight.ToString("0.###", CultureInfo.InvariantCulture),
+                    "decimalPlaces=" + settings.DecimalPlaces.ToString(CultureInfo.InvariantCulture),
+                    "trailLength=" + settings.TrailLength.ToString(CultureInfo.InvariantCulture),
+                    "uiRefreshRate=" + settings.UiRefreshRate.ToString(CultureInfo.InvariantCulture),
+                    "showAdvancedData=" + settings.ShowAdvancedData.ToString(CultureInfo.InvariantCulture),
+                    "stationarySampleDuration=" + settings.StationarySampleDuration.ToString("0.0", CultureInfo.InvariantCulture),
+                    "deadzoneSafetyMarginPercent=" + settings.DeadzoneSafetyMarginPercent.ToString("0.0", CultureInfo.InvariantCulture),
+                    "saveHistory=" + settings.SaveHistory.ToString(CultureInfo.InvariantCulture),
+                    "defaultRumbleStrengthPercent=" + settings.DefaultRumbleStrengthPercent.ToString("0.0", CultureInfo.InvariantCulture),
+                    "defaultRumbleDurationSeconds=" + settings.DefaultRumbleDurationSeconds.ToString("0.0", CultureInfo.InvariantCulture),
+                    "rumbleSafetyMaximumPercent=" + settings.RumbleSafetyMaximumPercent.ToString("0.0", CultureInfo.InvariantCulture)
                 };
                 File.WriteAllLines(FilePath, lines);
             }
-            catch
+            catch (Exception ex)
             {
+                LabLogger.Error("Settings", "Settings file could not be saved.", ex);
                 // Settings failure must not prevent live monitoring.
             }
         }

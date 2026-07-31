@@ -491,7 +491,8 @@ namespace ControllerLab
             renderedReportId = report.ReportId;
             reportScore.Text = report.OverallScore.ToString("0", CultureInfo.InvariantCulture);
             reportStatus.Text = report.OverallStatus + " / " + report.OverallStatusChinese;
-            reportMeta.Text = report.DeviceName + " · " + report.ConnectionType + "\n" + report.TestDateUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " · " + report.TestDurationSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " 秒 · " + (report.IsComplete ? "完整完成" : "检测不完整") + "\n保存位置：" + viewModel.SavedReportPath;
+            string storage = viewModel.SavedReportPath == null ? "保存失败（仍可手动导出）" : string.IsNullOrEmpty(viewModel.SavedReportPath) ? "按当前设置未保存（仍可手动导出）" : viewModel.SavedReportPath;
+            reportMeta.Text = report.DeviceName + " · " + report.ConnectionType + "\n" + report.TestDateUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " · " + report.TestDurationSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " 秒 · " + (report.IsComplete ? "完整完成" : "检测不完整") + "\n保存位置：" + storage;
             reportCards.Children.Clear();
             Grid categories = new Grid();
             for (int i = 0; i < report.Categories.Count; i++) categories.ColumnDefinitions.Add(new ColumnDefinition());

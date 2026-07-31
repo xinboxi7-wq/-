@@ -43,10 +43,14 @@ namespace ControllerLab
         public StickReturnDirection ActiveReturnDirection { get; private set; }
         public bool IsTestActive { get { return Mode != JoystickTestMode.Idle && Mode != JoystickTestMode.Cancelled; } }
         public bool IsCircularityActive { get { return Mode == JoystickTestMode.CircularityLeft || Mode == JoystickTestMode.CircularityRight; } }
+        public double StationarySampleDurationSeconds { get; set; }
+        public double DeadzoneSafetyMarginPercent { get; set; }
 
         public JoystickTestViewModel()
         {
             Mode = JoystickTestMode.Idle;
+            StationarySampleDurationSeconds = 5.0;
+            DeadzoneSafetyMarginPercent = 0.5;
             StatusMessage = "等待开始检测";
             Instruction = "请选择静止漂移、圆周测试或回中测试。";
         }
@@ -279,12 +283,13 @@ namespace ControllerLab
             AddBothSamples(state, stationaryLeftSamples, stationaryRightSamples, true);
             CurrentSampleCount = Math.Min(stationaryLeftSamples.Count, stationaryRightSamples.Count);
             CurrentSamplingFrequencyHz = Math.Min(Frequency(stationaryLeftSamples), Frequency(stationaryRightSamples));
-            StatusMessage = "静止采样 " + Math.Min(5.0, (nowUtc - phaseStartedUtc).TotalSeconds).ToString("0.0") + " / 5.0 秒";
-            if ((nowUtc - phaseStartedUtc).TotalSeconds < 5.0) return;
+            double duration = Math.Max(3.0, Math.Min(10.0, StationarySampleDurationSeconds));
+            StatusMessage = "静止采样 " + Math.Min(duration, (nowUtc - phaseStartedUtc).TotalSeconds).ToString("0.0") + " / " + duration.ToString("0.0") + " 秒";
+            if ((nowUtc - phaseStartedUtc).TotalSeconds < duration) return;
             LeftResult.Stationary = JoystickAnalyzer.AnalyzeStationary(StickSide.Left, stationaryLeftSamples);
             RightResult.Stationary = JoystickAnalyzer.AnalyzeStationary(StickSide.Right, stationaryRightSamples);
-            LeftResult.Deadzone = JoystickAnalyzer.RecommendDeadzone(StickSide.Left, LeftResult.Stationary);
-            RightResult.Deadzone = JoystickAnalyzer.RecommendDeadzone(StickSide.Right, RightResult.Stationary);
+            LeftResult.Deadzone = JoystickAnalyzer.RecommendDeadzone(StickSide.Left, LeftResult.Stationary, DeadzoneSafetyMarginPercent);
+            RightResult.Deadzone = JoystickAnalyzer.RecommendDeadzone(StickSide.Right, RightResult.Stationary, DeadzoneSafetyMarginPercent);
             RecalculateHealth();
             FinishSession(LeftResult.Stationary.IsValid && RightResult.Stationary.IsValid ? "静止漂移检测已完成" : "采样不足，未生成正常结论");
         }

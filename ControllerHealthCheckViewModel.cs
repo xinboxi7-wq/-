@@ -1007,7 +1007,7 @@ namespace ControllerLab
                 {
                     step.Status = HealthCheckStepStatus.Passed;
                     step.Record.Status = step.Status.ToString();
-                    step.Record.Summary = "报告已在本地生成。";
+                    step.Record.Summary = store.SaveEnabled ? "报告已在本地生成。" : "报告已生成；按当前设置未写入历史记录。";
                 }
                 report.Steps.Add(step.Record);
             }
@@ -1035,9 +1035,9 @@ namespace ControllerLab
             }
             IsRunning = false;
             CancelStepToken();
-            StatusMessage = SavedReportPath == null ? "健康报告已生成，但本地保存失败" : "健康报告已生成并保存";
+            StatusMessage = SavedReportPath == null ? "健康报告已生成，但本地保存失败" : string.IsNullOrEmpty(SavedReportPath) ? "健康报告已生成；按设置未保存历史" : "健康报告已生成并保存";
             DynamicInstruction = report.OverallStatus + " / " + report.OverallStatusChinese + " · " + report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100";
-            CurrentDetail = SavedReportPath ?? "报告仍可在当前页面查看和导出。";
+            CurrentDetail = SavedReportPath == null ? "报告仍可在当前页面查看和导出。" : string.IsNullOrEmpty(SavedReportPath) ? "可在当前结果页查看或手动导出。" : SavedReportPath;
         }
 
         private void HandleDisconnect(string message)

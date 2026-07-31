@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 
@@ -284,6 +285,9 @@ namespace ControllerLab
 
             StackPanel side = new StackPanel();
             side.Children.Add(Body("实时姿态与专业诊断", 18, Palette.TextBrush));
+            Border guide = LabVisualStyles.CreateInstructionCard("先静止校准，再缓慢转动手柄", "将手柄平放且不要触碰，完成 3 秒静止采样；随后检查左右旋转、前后倾斜和侧向倾斜。轴冻结、跳变或采样中断会显示为需要注意。", "1");
+            guide.Margin = new Thickness(0, 10, 0, 10);
+            side.Children.Add(guide);
             motionValues.Margin = new Thickness(0, 8, 0, 0);
             side.Children.Add(motionValues);
             motionDiagnostics.Margin = new Thickness(0, 8, 0, 0);
@@ -483,7 +487,10 @@ namespace ControllerLab
 
         private static Button Button(string text, bool primary)
         {
-            return new Button { Content = text, Style = primary ? LabVisualStyles.PrimaryButtonStyle : LabVisualStyles.SecondaryButtonStyle, Margin = new Thickness(0, 0, 8, 8), MinHeight = 34 };
+            Button button = new Button { Content = text, Style = primary ? LabVisualStyles.PrimaryButtonStyle : LabVisualStyles.SecondaryButtonStyle, Margin = new Thickness(0, 0, 8, 8), MinHeight = 34 };
+            AutomationProperties.SetName(button, text);
+            AutomationProperties.SetHelpText(button, "按 Enter 或空格键执行");
+            return button;
         }
 
         private static Slider Slider(double min, double max, double value)

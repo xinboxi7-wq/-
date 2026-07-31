@@ -303,6 +303,9 @@ namespace ControllerLab
             ScrollViewer scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
             StackPanel body = new StackPanel { Margin = new Thickness(16, 14, 16, 20) };
             scroll.Content = body;
+            Border guide = LabVisualStyles.CreateInstructionCard("先确认设备能力，再从低强度开始", "播放期间观察左右握把通道与时间线；位置、强度或输出异常时立即使用右上角“紧急停止”。离开页面、设备切换和异常都会自动归零。", "1");
+            guide.Margin = new Thickness(0, 0, 0, 14);
+            body.Children.Add(guide);
             body.Children.Add(SectionTitle("基础强度与手动播放"));
             leftSlider = MakeSlider(0, 100, 40);
             rightSlider = MakeSlider(0, 100, 40);
@@ -712,6 +715,7 @@ namespace ControllerLab
         {
             Button button = new Button { Content = text, Style = primary ? LabVisualStyles.PrimaryButtonStyle : LabVisualStyles.SecondaryButtonStyle, MinWidth = 90, Height = 34, Margin = new Thickness(0, 0, 7, 0) };
             AutomationProperties.SetName(button, text);
+            AutomationProperties.SetHelpText(button, "按 Enter 或空格键执行");
             return button;
         }
 

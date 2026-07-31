@@ -32,6 +32,7 @@ $compilerArgs = @(
     "/reference:$(Join-Path $framework 'System.dll')"
     "/reference:$(Join-Path $framework 'System.Core.dll')"
     "/reference:$(Join-Path $framework 'System.Runtime.Serialization.dll')"
+    "/reference:$(Join-Path $framework 'System.Xml.dll')"
     (Join-Path $project 'ControllerCore.cs')
     (Join-Path $project 'ControllerRumble.cs')
     (Join-Path $project 'RumbleProfessional.cs')
@@ -48,6 +49,7 @@ $compilerArgs = @(
     (Join-Path $project 'DualSenseAdvancedPage.cs')
     (Join-Path $project 'XboxOverlay.cs')
     (Join-Path $project 'ControllerLabTheme.cs')
+    (Join-Path $project 'ProductExperience.cs')
     (Join-Path $project 'ControllerLab.cs')
 )
 & (Join-Path $framework 'csc.exe') $compilerArgs

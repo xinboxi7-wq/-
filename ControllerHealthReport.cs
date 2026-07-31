@@ -335,6 +335,7 @@ namespace ControllerLab
     public sealed class ControllerHealthReportStore
     {
         private readonly string directory;
+        public bool SaveEnabled { get; set; }
 
         public static string DefaultDirectory
         {
@@ -347,6 +348,7 @@ namespace ControllerLab
         {
             if (string.IsNullOrEmpty(directory)) throw new ArgumentException("Report directory is required.", "directory");
             this.directory = Path.GetFullPath(directory);
+            SaveEnabled = true;
         }
 
         public string DirectoryPath { get { return directory; } }
@@ -354,6 +356,7 @@ namespace ControllerLab
         public string Save(ControllerHealthReport report)
         {
             if (report == null) throw new ArgumentNullException("report");
+            if (!SaveEnabled) return string.Empty;
             if (string.IsNullOrEmpty(report.ReportId)) report.ReportId = Guid.NewGuid().ToString("N");
             Directory.CreateDirectory(directory);
             string path = ReportPath(report.ReportId, ".json");

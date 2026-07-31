@@ -87,6 +87,7 @@ namespace ControllerLab
             statusText = new TextBlock { Text = "等待开始检测", Foreground = Palette.TextBrush, FontSize = 16, FontWeight = FontWeights.SemiBold };
             instructionText = new TextBlock { Text = "请选择静止漂移、圆周测试或回中测试。", Foreground = Palette.MutedBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
             sampleText = new TextBlock { Text = "有效采样 0 · 0.0 Hz", Foreground = Palette.BlueBrush, FontSize = 11, Margin = new Thickness(0, 5, 0, 0) };
+            TextBlock criteria = new TextBlock { Text = "判定依据：静止样本与噪声、72 个方向外圈覆盖、首次回中与最终稳定时间。采样不足不会生成正常结论。", Foreground = Palette.MutedBrush, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 0) };
             NavigationCheckBox = new CheckBox
             {
                 Content = "显示历史轨迹",
@@ -100,6 +101,7 @@ namespace ControllerLab
             guideCopy.Children.Add(statusText);
             guideCopy.Children.Add(instructionText);
             guideCopy.Children.Add(sampleText);
+            guideCopy.Children.Add(criteria);
             guideCopy.Children.Add(NavigationCheckBox);
             Grid.SetColumn(guideCopy, 1);
             guideGrid.Children.Add(guideCopy);
@@ -152,7 +154,16 @@ namespace ControllerLab
             rightDetails = new TextBlock { Foreground = Palette.MutedBrush, FontSize = 11, TextWrapping = TextWrapping.Wrap, LineHeight = 18 };
             detailGrid.Children.Add(BuildDetails("左摇杆详细数据", leftDetails, 0));
             detailGrid.Children.Add(BuildDetails("右摇杆详细数据", rightDetails, 2));
-            root.Children.Add(detailGrid);
+            Expander detailsExpander = new Expander
+            {
+                Header = "查看详细数据",
+                Foreground = Palette.TextBrush,
+                Margin = new Thickness(0, 8, 0, 0),
+                IsExpanded = false,
+                Content = detailGrid
+            };
+            AutomationProperties.SetName(detailsExpander, "摇杆检测详细数据");
+            root.Children.Add(detailsExpander);
             Refresh();
         }
 
@@ -406,6 +417,7 @@ namespace ControllerLab
                 Cursor = System.Windows.Input.Cursors.Hand
             };
             AutomationProperties.SetName(button, label);
+            AutomationProperties.SetHelpText(button, "按 Enter 或空格键执行");
             return button;
         }
     }
