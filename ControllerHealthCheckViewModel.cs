@@ -1035,9 +1035,9 @@ namespace ControllerLab
             }
             IsRunning = false;
             CancelStepToken();
-            StatusMessage = SavedReportPath == null ? "健康报告已生成，但本地保存失败" : string.IsNullOrEmpty(SavedReportPath) ? "健康报告已生成；按设置未保存历史" : "健康报告已生成并保存";
-            DynamicInstruction = report.OverallStatus + " / " + report.OverallStatusChinese + " · " + report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100";
-            CurrentDetail = SavedReportPath == null ? "报告仍可在当前页面查看和导出。" : string.IsNullOrEmpty(SavedReportPath) ? "可在当前结果页查看或手动导出。" : SavedReportPath;
+            StatusMessage = SavedReportPath == null ? "健康报告已生成，但本地保存失败" : string.IsNullOrEmpty(SavedReportPath) ? "健康报告已生成；按设置未保存历史" : "健康报告已生成并保存到本地数据目录";
+            DynamicInstruction = ControllerLabStatusLabels.Overall(report.OverallStatus) + " · " + report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100";
+            CurrentDetail = SavedReportPath == null ? "报告仍可在当前页面查看和导出。" : string.IsNullOrEmpty(SavedReportPath) ? "可在当前结果页查看或手动导出。" : "报告已保存到本地数据目录，可在设置页打开数据目录。";
         }
 
         private void HandleDisconnect(string message)
@@ -1144,7 +1144,7 @@ namespace ControllerLab
                 case HealthCheckStepStatus.Testing: return "检测中";
                 case HealthCheckStepStatus.Passed: return "已通过";
                 case HealthCheckStepStatus.Attention: return "需要注意";
-                case HealthCheckStepStatus.Abnormal: return "异常";
+                case HealthCheckStepStatus.Abnormal: return "严重异常";
                 case HealthCheckStepStatus.Skipped: return "已跳过";
                 case HealthCheckStepStatus.Unsupported: return "不支持";
                 default: return "等待";

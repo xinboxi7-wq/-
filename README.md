@@ -1,6 +1,8 @@
-# ControllerLab（手柄实验室）
+# ControllerLab
 
-ControllerLab 是一个 Windows 原生 WPF 手柄检测与实时可视化工具。它在一个设备首页中管理 Xbox / XInput 与 Sony DualSense 输入，并提供实时反馈、按键测试、摇杆健康检测、扳机曲线、体感显示和受保护的震动测试。
+ControllerLab 是 Windows 平台的手柄实时可视化与硬件健康检测工具。
+
+当前版本：**ControllerLab v1.0.0 Release Candidate 1**（程序集版本 1.0.0.0）。
 
 > 当前工程面向 Windows x64 与 .NET Framework 4.8，使用代码式 WPF；不依赖 WebView、HTML、CSS 或浏览器运行时。
 
@@ -44,13 +46,23 @@ ControllerLab 是一个 Windows 原生 WPF 手柄检测与实时可视化工具�
 
 ![震动测试](docs/screenshots/rumble-test.png)
 
+### 完整检测与产品页面
+
+![完整健康检测](docs/screenshots/health-report.png)
+
+![摇杆专业检测](docs/screenshots/joystick-test.png)
+
+![历史报告](docs/screenshots/history.png)
+
+![设置](docs/screenshots/settings.png)
+
 ## 支持设备与能力边界
 
 | 设备 | 接入方式 | 已实现能力 | 重要限制 |
 | --- | --- | --- | --- |
-| Xbox Wireless Controller / 兼容 XInput 手柄 | XInput | 实时输入、可视化、按键 / 摇杆 / 扳机检测、双电机震动 | 电量、连接方式、Guide / Share 等能力受设备和驱动影响。 |
-| Sony DualSense / DualSense Edge | 原生 HID（USB 或蓝牙） | 实时输入、专属可视化、按键 / 摇杆检测、触摸 / 运动解析、基础震动输出 | 触点 / 体感依赖完整报告；USB 与蓝牙震动输出仍待实机验证。 |
-| DUALSHOCK 4 | 原生 HID 兼容路径 | 基础识别与输入状态 | 完整能力尚未承诺，须按实际报告验证。 |
+| Xbox Wireless Controller / 兼容 XInput 手柄 | XInput | 输入：已实现；基础震动：已实现；摇杆检测：已实现 | 左右震动、断开重连和第三方差异需要实机记录。 |
+| Sony DualSense / DualSense Edge | 原生 HID（USB 或蓝牙） | USB/蓝牙输入：已实现；触摸板/陀螺仪：已解析；基础震动：已实现 | USB 与蓝牙物理方向、噪声和震动仍待实机验证；高级触觉、自适应扳机、灯带输出未开放。 |
+| DUALSHOCK 4 | 原生 HID 兼容路径 | 基础识别与输入状态：实验性 | 完整能力尚未承诺，须按实际报告验证。 |
 
 完整矩阵和“已实现 / 已实机验证”的区别见 [docs/DEVICE_SUPPORT.md](docs/DEVICE_SUPPORT.md)。
 
@@ -72,6 +84,16 @@ ControllerLab 是一个 Windows 原生 WPF 手柄检测与实时可视化工具�
 ```
 
 当前项目没有 `PackageReference` 或 `packages.config`，所以没有独立 Restore 步骤。`build.ps1` 使用本机 .NET Framework 4.8 x64 WPF 编译器；构建输出与调试产物均由 `.gitignore` 忽略。
+
+### 系统要求
+
+- Windows 10 或更高版本，x64。
+- .NET Framework 4.8（系统已安装时无需额外运行时目录）。
+- Visual Studio 2022 的 .NET desktop development 工作负载仅在从源码编译时需要。
+
+### 下载与运行
+
+发布包位于 `release/ControllerLab-v1.0.0-win-x64.zip`。解压后运行 `ControllerLab.exe`；发布包不包含源码、调试符号、本地设置或测试报告。
 
 可执行自检命令和实机回归步骤见 [docs/TESTING.md](docs/TESTING.md)。
 
@@ -126,6 +148,21 @@ ControllerLab/
 - Xbox 及第三方兼容手柄的连接名称、电量和震动能力取决于 XInput / 驱动实现。
 - 已校准的 Overlay 是稳定资产。普通 UI 调整不得改动其逻辑坐标、默认区域或真实 PNG Mask。
 - 没有真实设备验证记录的能力在文档中均标为“已实现但待实机验证”。
+- 本次发布候选版本尚未完成真实 Xbox 与 DualSense USB/蓝牙实机验收，因此暂不标记为 Stable。
+- 视觉素材的再分发许可仍需确认；见 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt)。
+
+## 数据保存与安全
+
+设置、健康报告、震动配置和日志只写入当前用户的应用数据目录（`%LocalAppData%\\ControllerLab` 及其子目录）。界面不会显示完整本地路径；请使用设置页的“打开数据目录”。
+
+震动默认强度不超过 40%，默认持续时间不超过 5 秒，单次连续播放不超过 30 秒。页面离开、设备断开、设备切换、检测互斥和应用退出都会停止并归零震动输出。
+
+## 已知问题与路线图
+
+- 需要真实 Xbox XInput、DualSense USB 和 DualSense 蓝牙设备分别完成输入、震动、断开重连和方向验证。
+- DualSense 高级触觉、自适应扳机和灯带输出保持禁用，不会发送未经验证的报告。
+- 第三方 XInput 设备的连接方式、电量和震动能力依赖驱动实现。
+- 后续仅维护实机验证记录、兼容性修复和安全问题；不在 v1.0.0 范围内增加云同步、账号或插件系统。
 
 ## 路线图
 
@@ -133,4 +170,4 @@ ControllerLab/
 
 ## 许可证
 
-当前仓库**尚未声明开源许可证**。在添加 `LICENSE` 文件前，请勿假设可自由再发布或修改。
+源代码按 [MIT License](LICENSE.txt) 发布。手柄图片、遮罩和其他视觉素材的公开再分发许可需要单独确认；在确认前请勿将这些素材用于商业再发布。

@@ -1,5 +1,9 @@
 # ControllerLab 架构
 
+## 版本与发布
+
+`BuildInfo.cs` 是运行时版本单一来源，程序集和文件版本为 `1.0.0.0`，显示版本为 `v1.0.0`。`StatusLabels.cs` 集中维护健康报告的英文 / 中文状态映射。发布候选目录为 `release/ControllerLab-v1.0.0-win-x64/`，目标运行时为系统提供的 .NET Framework 4.8。
+
 ## 摇杆专业检测分层（2026-07-31）
 
 `JoystickTestPage` 只负责原生 WPF 绘制和用户操作，`JoystickTestViewModel` 负责采样与可取消状态机，`JoystickAnalyzer` 负责全部数值分析。三者继续消费统一 `ControllerState`，不接触或替换 XInput、Raw Input、HID 和设备识别实现。详见 `JOYSTICK_PRO_TEST.md`。

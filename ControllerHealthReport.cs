@@ -105,7 +105,7 @@ namespace ControllerLab
         [DataMember(Order = 6)] public string ConnectionType = string.Empty;
         [DataMember(Order = 7)] public DateTime TestDateUtc;
         [DataMember(Order = 8)] public double TestDurationSeconds;
-        [DataMember(Order = 9)] public string AppVersion = "v1.3.0-health-test";
+        [DataMember(Order = 9)] public string AppVersion = ControllerLabVersion.Display;
         [DataMember(Order = 10)] public bool IsComplete;
         [DataMember(Order = 11)] public double OverallScore;
         [DataMember(Order = 12)] public string OverallStatus = "Incomplete";
@@ -129,7 +129,7 @@ namespace ControllerLab
             text.AppendLine("- 检测时间: " + TestDateUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
             text.AppendLine("- 测试时长: " + TestDurationSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " 秒");
             text.AppendLine("- 综合评分: " + OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100");
-            text.AppendLine("- 总体状态: " + OverallStatus + " / " + OverallStatusChinese);
+            text.AppendLine("- 总体状态: " + ControllerLabStatusLabels.Overall(OverallStatus));
             text.AppendLine("- 完整完成: " + (IsComplete ? "是" : "否"));
             text.AppendLine();
             text.AppendLine("## 分类评分");
@@ -139,7 +139,7 @@ namespace ControllerLab
             for (int i = 0; i < Categories.Count; i++)
             {
                 HealthCategoryScore category = Categories[i];
-                text.AppendLine("| " + category.DisplayName + " | " + category.Status + " | " + (category.Tested ? category.Score.ToString("0", CultureInfo.InvariantCulture) : "—") + " |");
+                text.AppendLine("| " + category.DisplayName + " | " + ControllerLabStatusLabels.Category(category) + " | " + (category.Tested ? category.Score.ToString("0", CultureInfo.InvariantCulture) : "—") + " |");
             }
             text.AppendLine();
             text.AppendLine("## 检测项目");
@@ -149,7 +149,7 @@ namespace ControllerLab
                 text.AppendLine();
                 text.AppendLine("### " + step.Title);
                 text.AppendLine();
-                text.AppendLine("- 状态: " + step.Status);
+                text.AppendLine("- 状态: " + ControllerLabStatusLabels.Step(step.Status));
                 if (step.ParticipatesInScore) text.AppendLine("- 分数: " + step.Score.ToString("0", CultureInfo.InvariantCulture) + "/100");
                 if (!string.IsNullOrEmpty(step.Summary)) text.AppendLine("- 结果: " + step.Summary);
                 if (!string.IsNullOrEmpty(step.Issue)) text.AppendLine("- 问题: " + step.Issue);

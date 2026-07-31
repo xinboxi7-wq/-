@@ -490,9 +490,10 @@ namespace ControllerLab
             if (report == null || renderedReportId == report.ReportId) return;
             renderedReportId = report.ReportId;
             reportScore.Text = report.OverallScore.ToString("0", CultureInfo.InvariantCulture);
-            reportStatus.Text = report.OverallStatus + " / " + report.OverallStatusChinese;
-            string storage = viewModel.SavedReportPath == null ? "保存失败（仍可手动导出）" : string.IsNullOrEmpty(viewModel.SavedReportPath) ? "按当前设置未保存（仍可手动导出）" : viewModel.SavedReportPath;
-            reportMeta.Text = report.DeviceName + " · " + report.ConnectionType + "\n" + report.TestDateUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " · " + report.TestDurationSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " 秒 · " + (report.IsComplete ? "完整完成" : "检测不完整") + "\n保存位置：" + storage;
+            string storage = viewModel.SavedReportPath == null ? "保存失败（仍可手动导出）" : string.IsNullOrEmpty(viewModel.SavedReportPath) ? "按当前设置未保存（仍可手动导出）" : "报告已保存到本地数据目录";
+            string scoreContext = ControllerLabStatusLabels.ScoreContext(report);
+            reportStatus.Text = ControllerLabStatusLabels.Overall(report.OverallStatus) + (string.IsNullOrEmpty(scoreContext) ? string.Empty : " · " + scoreContext);
+            reportMeta.Text = report.DeviceName + " · " + report.ConnectionType + "\n" + report.TestDateUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " · " + report.TestDurationSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " 秒 · " + (report.IsComplete ? "完整完成" : "检测不完整") + "\n" + storage;
             reportCards.Children.Clear();
             Grid categories = new Grid();
             for (int i = 0; i < report.Categories.Count; i++) categories.ColumnDefinitions.Add(new ColumnDefinition());
@@ -504,7 +505,7 @@ namespace ControllerLab
                 StackPanel copy = new StackPanel();
                 copy.Children.Add(new TextBlock { Text = category.DisplayName, Foreground = Palette.MutedBrush, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Center });
                 copy.Children.Add(new TextBlock { Text = category.Tested ? category.Score.ToString("0", CultureInfo.InvariantCulture) : "—", Foreground = category.Tested ? Palette.TextBrush : Palette.MutedBrush, FontSize = 21, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 3, 0, 0) });
-                copy.Children.Add(new TextBlock { Text = category.Status, Foreground = CategoryBrush(category), FontSize = 10, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) });
+                copy.Children.Add(new TextBlock { Text = ControllerLabStatusLabels.Category(category), Foreground = CategoryBrush(category), FontSize = 10, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) });
                 card.Child = copy;
                 Grid.SetColumn(card, i);
                 categories.Children.Add(card);
@@ -527,7 +528,7 @@ namespace ControllerLab
             grid.ColumnDefinitions.Add(new ColumnDefinition());
             StackPanel title = new StackPanel();
             title.Children.Add(new TextBlock { Text = item.Title, Foreground = Palette.TextBrush, FontSize = 14, FontWeight = FontWeights.SemiBold });
-            title.Children.Add(new TextBlock { Text = item.Status + (item.ParticipatesInScore ? " · " + item.Score.ToString("0", CultureInfo.InvariantCulture) + "/100" : string.Empty), Foreground = RecordBrush(item.Status), FontSize = 11, Margin = new Thickness(0, 4, 0, 0) });
+            title.Children.Add(new TextBlock { Text = ControllerLabStatusLabels.Step(item.Status) + (item.ParticipatesInScore ? " · " + item.Score.ToString("0", CultureInfo.InvariantCulture) + "/100" : string.Empty), Foreground = RecordBrush(item.Status), FontSize = 11, Margin = new Thickness(0, 4, 0, 0) });
             grid.Children.Add(title);
             StackPanel detail = new StackPanel();
             detail.Children.Add(new TextBlock { Text = string.IsNullOrEmpty(item.Summary) ? "无摘要" : item.Summary, Foreground = Palette.TextBrush, FontSize = 11, TextWrapping = TextWrapping.Wrap });
@@ -548,7 +549,7 @@ namespace ControllerLab
                 ControllerHealthReport report = historyReports[i];
                 historyList.Items.Add(report.TestDateUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " · " + report.DeviceName + " · " + report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + " · " + report.OverallStatusChinese);
             }
-            historyDetail.Text = historyReports.Count == 0 ? "尚无历史报告。\n保存目录：" + store.DirectoryPath : "选择一份历史报告。";
+            historyDetail.Text = historyReports.Count == 0 ? "尚无历史报告。\n报告保存在本地数据目录。可在设置页打开目录。" : "选择一份历史报告。";
             ShowPanel(historyPanel);
         }
 
@@ -560,10 +561,11 @@ namespace ControllerLab
             text.AppendLine(report.DeviceName + " · " + report.DeviceType);
             text.AppendLine(report.ConnectionType + " · " + report.TestDateUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
             text.AppendLine();
-            text.AppendLine(report.OverallStatus + " / " + report.OverallStatusChinese + " · " + report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100");
+            text.AppendLine(ControllerLabStatusLabels.Overall(report.OverallStatus) + " · " + report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100");
+            if (!report.IsComplete) text.AppendLine(ControllerLabStatusLabels.ScoreContext(report));
             text.AppendLine(report.IsComplete ? "完整完成" : "检测不完整");
             text.AppendLine();
-            for (int i = 0; i < report.Categories.Count; i++) text.AppendLine(report.Categories[i].DisplayName + "：" + report.Categories[i].Status + (report.Categories[i].Tested ? " · " + report.Categories[i].Score.ToString("0", CultureInfo.InvariantCulture) : string.Empty));
+            for (int i = 0; i < report.Categories.Count; i++) text.AppendLine(report.Categories[i].DisplayName + "：" + ControllerLabStatusLabels.Category(report.Categories[i]) + (report.Categories[i].Tested ? " · " + report.Categories[i].Score.ToString("0", CultureInfo.InvariantCulture) : string.Empty));
             historyDetail.Text = text.ToString();
         }
 
@@ -652,6 +654,7 @@ namespace ControllerLab
                 Margin = new Thickness(0, 0, 8, 8),
                 Padding = new Thickness(14, 4, 14, 4),
                 Foreground = primary ? Brushes.White : Palette.TextBrush,
+                Style = LabVisualStyles.StyleForButton(primary ? LabButtonVariant.Primary : LabButtonVariant.Secondary),
                 Background = primary ? Palette.BlueBrush : Palette.SurfaceRaisedBrush,
                 BorderBrush = primary ? Palette.BlueBrush : Palette.BorderBrush,
                 BorderThickness = new Thickness(1),

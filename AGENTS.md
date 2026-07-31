@@ -6,6 +6,7 @@
 - **类型：** Windows 原生 WPF 桌面应用
 - **主要语言：** C#；当前 UI 为代码式 WPF（工程目前没有独立 XAML 视图）
 - **目标：** Xbox 与 DualSense 手柄实时可视化、输入测试和硬件健康诊断
+- **当前版本：** ControllerLab v1.0.0，发布候选 `v1.0.0-rc.1`
 
 ## 技术边界
 
@@ -51,6 +52,14 @@
 # 使用项目内置的 .NET Framework 4.8 x64 WPF 编译脚本
 .\build.ps1 -OutputName ControllerLab.exe
 
+# Visual Studio Build Tools 的 Clean 验证（Build 需要 .NET Framework 4.8 Developer Pack）
+& "$env:ProgramFiles(x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe" .\ControllerLab.sln /t:Clean /p:Configuration=Debug /p:Platform=x64
+& "$env:ProgramFiles(x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe" .\ControllerLab.sln /t:Clean /p:Configuration=Release /p:Platform=x64
+
+# 在没有 Developer Pack 的机器上使用等价的项目内置编译入口
+.\build.ps1 -OutputName ControllerLab_Debug_1.0.0.exe -Configuration Debug
+.\build.ps1 -OutputName ControllerLab_Release_1.0.0.exe -Configuration Release
+
 # 常用逻辑 / 运行时自检（先完成上一步构建）
 .\ControllerLab.exe --startup-selftest
 .\ControllerLab.exe --runtime-selftest
@@ -65,7 +74,7 @@
 .\ControllerLab.exe --rumble-selftest
 ```
 
-当前没有 Publish Profile 或 `dotnet publish` 流程。用于本地测试的可执行文件由 `build.ps1` 生成；发布包应在单独、可复现的发布流程中创建。
+发布流程为 `release/ControllerLab-v1.0.0-win-x64/`，发布包不包含源码、调试符号、测试文件或本地设置。当前使用 .NET Framework 4.8 系统运行时，不生成 self-contained .NET 包。
 
 ## 文档索引
 

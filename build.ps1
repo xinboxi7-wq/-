@@ -1,15 +1,19 @@
 param(
-    [string]$OutputName = 'ControllerLab.exe'
+    [string]$OutputName = 'ControllerLab.exe',
+    [ValidateSet('Debug', 'Release')]
+    [string]$Configuration = 'Release'
 )
 $ErrorActionPreference = 'Stop'
 $framework = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319'
 $wpf = Join-Path $framework 'WPF'
 $project = Split-Path -Parent $MyInvocation.MyCommand.Path
+$isDebug = $Configuration -eq 'Debug'
 $compilerArgs = @(
     '/nologo'
     '/target:winexe'
     '/platform:x64'
-    '/optimize+'
+    $(if ($isDebug) { '/optimize-' } else { '/optimize+' })
+    $(if ($isDebug) { '/debug:full' } else { '/debug:pdbonly' })
     '/codepage:65001'
     "/win32manifest:$(Join-Path $project 'app.manifest')"
     "/out:$(Join-Path $project $OutputName)"
@@ -34,6 +38,8 @@ $compilerArgs = @(
     "/reference:$(Join-Path $framework 'System.Runtime.Serialization.dll')"
     "/reference:$(Join-Path $framework 'System.Xml.dll')"
     (Join-Path $project 'ControllerCore.cs')
+    (Join-Path $project 'BuildInfo.cs')
+    (Join-Path $project 'StatusLabels.cs')
     (Join-Path $project 'ControllerRumble.cs')
     (Join-Path $project 'RumbleProfessional.cs')
     (Join-Path $project 'RumbleStudioPage.cs')
@@ -54,4 +60,4 @@ $compilerArgs = @(
 )
 & (Join-Path $framework 'csc.exe') $compilerArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host "Built: $(Join-Path $project $OutputName)"
+Write-Host "Built: $(Join-Path $project $OutputName) [$Configuration]"

@@ -1,5 +1,16 @@
 # 测试与回归指南
 
+## v1.0.0 RC 验证记录（2026-07-31）
+
+- Debug：`build.ps1 -Configuration Debug` 成功，生成 `ControllerLab_Debug_1.0.0.exe`。
+- Release：`build.ps1 -Configuration Release` 成功，生成 `ControllerLab_Release_1.0.0.exe`。
+- Visual Studio MSBuild Clean：成功；Build 受本机未安装 .NET Framework 4.8 Developer Pack 阻断，已使用项目内置等价 x64 csc Debug / Release 流程完成编译。
+- 自动自检：18 项命令行自检全部通过，另含产品页面启动 / 关闭烟雾测试。
+- 发布目录启动：`release/ControllerLab-v1.0.0-win-x64/ControllerLab.exe` 的 startup self-test、无设备启动、关闭退出均通过。
+- 发布包：`ControllerLab-v1.0.0-win-x64.zip`，7,275,036 bytes；EXE 4,302,848 bytes。
+- 发布包 SHA256：`B1BBDA035A31D6F158AE6582FF0E8684413196DA22BF07D92C8FA19B2AE96360`。
+- 真实硬件：本环境未连接受支持手柄，Xbox / DualSense USB / 蓝牙输入、震动、触摸、体感和断开重连列为人工实机测试。
+
 新增摇杆专业分析自检：
 
 ```powershell
@@ -58,11 +69,11 @@
 # UI 产品设置、报告比较、日志轮转与逻辑 DPI 布局
 .\ControllerLab_Test.exe --product-experience-selftest
 
-# 生成三张离线 WPF 渲染审计图
+# 生成六张离线 WPF 渲染审计图
 .\ControllerLab_Test.exe --product-ui-render-audit
 ```
 
-当前没有 Publish Profile 或 `dotnet publish` 命令。用于本地测试的 EXE 由 `build.ps1` 创建；正式 Release 打包需另行记录步骤，且不得提交 `bin/`、`obj/` 或本地测试 EXE。
+当前没有 Publish Profile 或 `dotnet publish` 命令。发布使用 `build.ps1 -Configuration Release` 后的 EXE 和明确的发布目录清单；发布包不包含 PDB、bin/、obj/、源码、测试文件或本地设置。由于目标是 .NET Framework 4.8，发布包依赖 Windows 已安装的 .NET Framework 4.8，不是 self-contained .NET 包。
 
 ## 自动自检范围
 
@@ -83,7 +94,7 @@
 | `--trigger-chart-selftest` | 缓冲区与曲线逻辑 | 真实扳机噪声 |
 | `--rumble-selftest` | 0% 停止、左右隔离、25 Hz 时间线插值、完成/取消/页面/异常归零、快速替换、预设持久化、损坏配置和不支持设备门控，以及 USB/BT 报告 | 真实震感 / HID 写入兼容性 |
 | `--product-experience-selftest` | 设置范围、报告比较、日志轮转和 1080p/1440p/1600p 逻辑 DPI 矩阵 | 真实屏幕的 ClearType、跨显示器与触摸操作 |
-| `--product-ui-render-audit` | 实时监视、设置、历史报告在 125%/150% 等效尺寸的原生 WPF 离线渲染 | 真实显示器色彩与系统主题差异 |
+| `--product-ui-render-audit` | 实时监视、摇杆、震动、完整检测、设置、历史报告在 125%/150% 等效尺寸的原生 WPF 离线渲染 | 真实显示器色彩与系统主题差异 |
 
 ## Xbox 实机回归
 

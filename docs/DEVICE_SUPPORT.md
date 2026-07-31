@@ -1,5 +1,7 @@
 # 设备支持矩阵
 
+当前文档对应 ControllerLab v1.0.0 Release Candidate 1。代码自检通过不等于真实设备验证；本环境未连接 Xbox 或 DualSense，因此所有硬件能力仍按下表保守标记。
+
 状态定义：
 
 - **Supported and verified**：有代码且已记录真实设备验证。

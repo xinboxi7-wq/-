@@ -836,7 +836,7 @@ namespace ControllerLab
             motionManager = new DualSenseMotionManager();
             dualSenseAdvancedManager = new DualSenseAdvancedManager();
             ApplyProductSettings(productSettings, false);
-            Title = "手柄实验室";
+            Title = "手柄实验室 · " + ControllerLabVersion.Display;
             MinWidth = 1020;
             MinHeight = 680;
             Rect workArea = SystemParameters.WorkArea;
@@ -2552,6 +2552,9 @@ namespace ControllerLab
             string root = System.IO.Path.GetFullPath(directory);
             Directory.CreateDirectory(root);
             RenderProductUiPage(System.IO.Path.Combine(root, "live-1920x1080-at-150.png"), 1, 1280, 720);
+            RenderProductUiPage(System.IO.Path.Combine(root, "joystick-1920x1080-at-125.png"), 3, 1536, 864);
+            RenderProductUiPage(System.IO.Path.Combine(root, "rumble-1920x1080-at-125.png"), 5, 1536, 864);
+            RenderProductUiPage(System.IO.Path.Combine(root, "health-1920x1080-at-125.png"), 6, 1536, 864);
             RenderProductUiPage(System.IO.Path.Combine(root, "settings-1920x1080-at-125.png"), 8, 1536, 864);
             RenderProductUiPage(System.IO.Path.Combine(root, "history-2560x1600-at-125.png"), 7, 2048, 1280);
             return "Product UI render audit created: " + root;
@@ -2769,7 +2772,7 @@ namespace ControllerLab
             {
                 StickTestEvidenceSaveResult saved = StickTestEvidenceStore.Save(result);
                 if (stickTestStatusText != null) stickTestStatusText.Text = "实测记录已保存，可在本地复查或附到问题反馈。";
-                if (footerStatus != null) footerStatus.Text = "已保存中文报告：" + saved.TextPath;
+                if (footerStatus != null) footerStatus.Text = "中文报告已保存到本地数据目录。";
             }
             catch (Exception ex)
             {
@@ -2793,7 +2796,7 @@ namespace ControllerLab
             ControllerState state = currentControllerState;
             if (state == null || !state.IsConnected || !state.HasRealInput)
             {
-                return "ControllerLab v1.2.0-test 检测报告\n当前未连接可用于正式检测的真实设备。\n动态演示和构造自检数据不会进入正式报告。";
+                return "ControllerLab " + ControllerLabVersion.Display + " 检测报告\n当前未连接可用于正式检测的真实设备。\n动态演示和构造自检数据不会进入正式报告。";
             }
             ControllerTestReport buttons = inputTestEngine.BuildReport(state, stickTriggerTestEngine);
             ControllerStickTestResult sticks = stickDriftTestEngine.LastResult;
@@ -2804,7 +2807,7 @@ namespace ControllerLab
             string unpassed = buttons.UnpassedButtons == null || buttons.UnpassedButtons.Count == 0 ? "无（全部通过）" : string.Join("、", buttons.UnpassedButtons.ToArray());
             bool valid = left != null && right != null && left.IsValid && right.IsValid;
             return string.Format(CultureInfo.InvariantCulture,
-                "ControllerLab v1.2.0-test 检测报告\n检测时间：{0:yyyy-MM-dd HH:mm:ss}\n设备：{1}\n设备 ID：{2}\n手柄类型：{3}\n连接方式：{4}\n输入来源：{5}\n\n按键：{6}/{7} 通过\n未通过按钮：{8}\n左/右扳机峰值：{9:0}% / {10:0}%\n\n左摇杆：P95 {11}，建议死区 {12}\n连续检测：{13}\n范围：{14}\n右摇杆：P95 {15}，建议死区 {16}\n连续检测：{17}\n范围：{18}\n检测有效：{19}",
+                "ControllerLab " + ControllerLabVersion.Display + " 检测报告\n检测时间：{0:yyyy-MM-dd HH:mm:ss}\n设备：{1}\n设备 ID：{2}\n手柄类型：{3}\n连接方式：{4}\n输入来源：{5}\n\n按键：{6}/{7} 通过\n未通过按钮：{8}\n左/右扳机峰值：{9:0}% / {10:0}%\n\n左摇杆：P95 {11}，建议死区 {12}\n连续检测：{13}\n范围：{14}\n右摇杆：P95 {15}，建议死区 {16}\n连续检测：{17}\n范围：{18}\n检测有效：{19}",
                 sticks == null ? DateTime.Now : sticks.TestTime,
                 state.DeviceName, string.IsNullOrEmpty(state.DeviceId) ? "—" : state.DeviceId, state.ControllerType, state.ConnectionTypeLabel, state.InputSourceLabel,
                 buttons.ButtonTestPassedCount, buttons.ButtonTestTotalCount, unpassed, buttons.LeftTriggerMaximum * 100.0, buttons.RightTriggerMaximum * 100.0,

@@ -355,7 +355,8 @@ namespace ControllerLab
             StackPanel copy = new StackPanel();
             copy.Children.Add(new TextBlock { Text = string.IsNullOrWhiteSpace(report.DeviceName) ? "未知手柄" : report.DeviceName, Foreground = Palette.TextBrush, FontSize = LabFontSizes.BodyLarge, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
             copy.Children.Add(new TextBlock { Text = report.TestDateUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " · " + report.ConnectionType, Foreground = Palette.MutedBrush, FontSize = LabFontSizes.Caption, Margin = new Thickness(0, 4, 0, 0) });
-            copy.Children.Add(new TextBlock { Text = report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100 · " + StatusChinese(report), Foreground = StatusBrush(report), FontSize = LabFontSizes.Body, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 7, 0, 0) });
+            string scoreContext = ControllerLabStatusLabels.ScoreContext(report);
+            copy.Children.Add(new TextBlock { Text = report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100 · " + ControllerLabStatusLabels.Overall(report.OverallStatus) + (string.IsNullOrEmpty(scoreContext) ? string.Empty : "\n" + scoreContext), Foreground = StatusBrush(report), FontSize = LabFontSizes.Body, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 7, 0, 0) });
             Border surface = LabVisualStyles.CreateMetricCard(copy);
             surface.Padding = new Thickness(16, 13, 16, 13);
             ListBoxItem item = new ListBoxItem { Content = surface, Tag = report, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 8), HorizontalContentAlignment = HorizontalAlignment.Stretch };
@@ -365,12 +366,7 @@ namespace ControllerLab
 
         private static string StatusChinese(ControllerHealthReport report)
         {
-            if (!string.IsNullOrWhiteSpace(report.OverallStatusChinese)) return report.OverallStatusChinese;
-            if (report.OverallStatus == HealthReportOverallStatus.Excellent.ToString()) return "优秀";
-            if (report.OverallStatus == HealthReportOverallStatus.Good.ToString()) return "良好";
-            if (report.OverallStatus == HealthReportOverallStatus.Attention.ToString()) return "需要注意";
-            if (report.OverallStatus == HealthReportOverallStatus.Poor.ToString()) return "状态较差";
-            return "检测未完成";
+            return report == null ? "Incomplete / 检测未完成" : ControllerLabStatusLabels.Overall(report.OverallStatus);
         }
 
         private static Brush StatusBrush(ControllerHealthReport report)
@@ -431,7 +427,8 @@ namespace ControllerLab
             ControllerHealthReport report = selected[0];
             StringBuilder text = new StringBuilder();
             text.AppendLine(report.DeviceName);
-            text.AppendLine(report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100 · " + StatusChinese(report));
+            text.AppendLine(report.OverallScore.ToString("0", CultureInfo.InvariantCulture) + "/100 · " + ControllerLabStatusLabels.Overall(report.OverallStatus));
+            if (!report.IsComplete) text.AppendLine(ControllerLabStatusLabels.ScoreContext(report));
             text.AppendLine();
             text.AppendLine("连接方式  " + report.ConnectionType);
             text.AppendLine("检测时间  " + report.TestDateUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
@@ -444,7 +441,7 @@ namespace ControllerLab
                 for (int i = 0; i < report.Categories.Count; i++)
                 {
                     HealthCategoryScore category = report.Categories[i];
-                    text.AppendLine("  " + category.DisplayName + "  " + (category.Tested ? category.Score.ToString("0", CultureInfo.InvariantCulture) + "/100" : "未检测") + "  " + category.Status);
+                    text.AppendLine("  " + category.DisplayName + "  " + (category.Tested ? category.Score.ToString("0", CultureInfo.InvariantCulture) + "/100" : "—") + "  " + ControllerLabStatusLabels.Category(category));
                 }
             }
             text.AppendLine();
@@ -569,7 +566,7 @@ namespace ControllerLab
             RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             StackPanel heading = new StackPanel();
-            heading.Children.Add(LabVisualStyles.CreatePageTitle("设置"));
+            heading.Children.Add(LabVisualStyles.CreatePageTitle("设置 · ControllerLab " + ControllerLabVersion.Display));
             heading.Children.Add(new TextBlock { Text = "调整显示与测试默认值。硬件输入、Overlay 坐标和检测算法不会被这里改写。", Foreground = Palette.MutedBrush, FontSize = LabFontSizes.Body, Margin = new Thickness(0, 6, 0, 0) });
             Children.Add(heading);
 

@@ -25,6 +25,13 @@
 logs/
 crash.log
 *.override.json
+health-reports/
+stick-test-records/
+rumble/
+DualSense/
+XboxControllerLab/
+settings.ini
+*.settings.json
 
 # Generated visual audit output
 audit/
