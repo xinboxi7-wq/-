@@ -197,6 +197,31 @@ namespace ControllerLab
 
     public static class RumblePatternMath
     {
+        public static RumblePatternDefinition ScaleToPeak(RumblePatternDefinition source, double requestedPeak)
+        {
+            if (source == null) return null;
+            RumblePatternDefinition scaled = source.Copy();
+            double sourcePeak = scaled.MaximumStrength;
+            double targetPeak = Clamp01(requestedPeak);
+            if (sourcePeak <= 0)
+            {
+                for (int i = 0; i < scaled.Steps.Count; i++)
+                {
+                    scaled.Steps[i].LeftStrength = 0;
+                    scaled.Steps[i].RightStrength = 0;
+                }
+                return scaled;
+            }
+
+            double scale = targetPeak / sourcePeak;
+            for (int i = 0; i < scaled.Steps.Count; i++)
+            {
+                scaled.Steps[i].LeftStrength = Clamp01(scaled.Steps[i].LeftStrength * scale);
+                scaled.Steps[i].RightStrength = Clamp01(scaled.Steps[i].RightStrength * scale);
+            }
+            return scaled;
+        }
+
         public static void Evaluate(RumblePatternDefinition pattern, double time, out double left, out double right, out string label)
         {
             left = 0;
@@ -886,7 +911,7 @@ namespace ControllerLab
                 VerifyInterpolation();
                 VerifyPlayerSafety();
                 VerifyPersistence(temporaryRoot);
-                return "professional-player-25hz-zero-channels-interpolation-complete-cancel-page-exception-single-task-persistence-corruption-unsupported";
+                return "professional-player-25hz-zero-channels-interpolation-preset-100-fullscale-complete-cancel-page-exception-single-task-persistence-corruption-unsupported";
             }
             finally
             {
@@ -905,6 +930,13 @@ namespace ControllerLab
             RumblePatternMath.Evaluate(pattern, 0.5, out left, out right, out label);
             Require(Math.Abs(left - 0.5) < 0.02 && Math.Abs(right - 0.25) < 0.02, "timeline linear interpolation failed");
             Require(RumblePatternPlayer.OutputRefreshRateHz >= 20 && RumblePatternPlayer.OutputRefreshRateHz <= 60, "output refresh rate is outside safe range");
+
+            RumblePatternDefinition builtIn = RumblePatternCatalog.Find("balanced");
+            RumblePatternDefinition fullScale = RumblePatternMath.ScaleToPeak(builtIn, 1.0);
+            RumblePatternDefinition fortyPercent = RumblePatternMath.ScaleToPeak(builtIn, 0.40);
+            Require(fullScale != null && Math.Abs(fullScale.MaximumStrength - 1.0) < 0.0001, "100% preset peak did not map to full-scale output");
+            Require(fortyPercent != null && Math.Abs(fortyPercent.MaximumStrength - 0.40) < 0.0001, "40% preset peak did not map to 40% output");
+            Require(Math.Abs(builtIn.MaximumStrength - 0.32) < 0.0001, "peak scaling mutated the source preset");
         }
 
         private static void VerifyPlayerSafety()

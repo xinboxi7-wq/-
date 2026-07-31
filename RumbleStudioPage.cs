@@ -114,6 +114,7 @@ namespace ControllerLab
         private TextBlock statusText;
         private TextBlock stepText;
         private TextBlock timeText;
+        private TextBlock actualOutputText;
         private Border leftGrip;
         private Border rightGrip;
         private RumbleTimelineView liveTimeline;
@@ -148,7 +149,7 @@ namespace ControllerLab
             this.store = store ?? new RumbleSettingsStore();
             calibration = new RumbleCalibrationController(controller);
             builtIns = RumblePatternCatalog.CreateBuiltIns();
-            selectedPattern = FindPattern("balanced") ?? builtIns[0];
+            selectedPattern = RumblePatternMath.ScaleToPeak(FindPattern("balanced") ?? builtIns[0], ControllerRumbleController.DefaultStrength);
             editingPattern = CreateDefaultCustomPattern();
             Background = Palette.WindowBrush;
             BuildPage();
@@ -177,6 +178,8 @@ namespace ControllerLab
             statusText.Foreground = outputBlocked ? Palette.WarningBrush : snapshot.IsRunning ? Palette.BlueBrush : snapshot.LastOutputSucceeded ? Palette.GreenBrush : Palette.MutedBrush;
             stepText.Text = "当前步骤：" + snapshot.CurrentStepLabel;
             timeText.Text = snapshot.ElapsedSeconds.ToString("0.00", CultureInfo.InvariantCulture) + " / " + snapshot.TotalSeconds.ToString("0.00", CultureInfo.InvariantCulture) + " 秒 · 剩余 " + snapshot.RemainingSeconds.ToString("0.00", CultureInfo.InvariantCulture) + " 秒";
+            actualOutputText.Text = string.Format(CultureInfo.InvariantCulture, "实际输出：左 {0:0}% · 右 {1:0}%", snapshot.LeftStrength * 100, snapshot.RightStrength * 100);
+            actualOutputText.Foreground = snapshot.LeftStrength >= 0.99 || snapshot.RightStrength >= 0.99 ? Palette.WarningBrush : Palette.TextBrush;
             leftGrip.Opacity = 0.16 + snapshot.LeftStrength * 0.84;
             rightGrip.Opacity = 0.16 + snapshot.RightStrength * 0.84;
             liveTimeline.Pattern = selectedPattern;
@@ -271,9 +274,11 @@ namespace ControllerLab
             statusText = new TextBlock { Text = "等待开始", Foreground = Palette.MutedBrush, FontSize = 11, TextWrapping = TextWrapping.Wrap };
             stepText = new TextBlock { Text = "当前步骤：等待", Foreground = Palette.TextBrush, FontSize = 11, Margin = new Thickness(0, 3, 0, 0) };
             timeText = new TextBlock { Text = "0.00 / 0.00 秒", Foreground = Palette.MutedBrush, FontSize = 10, Margin = new Thickness(0, 2, 0, 0) };
+            actualOutputText = new TextBlock { Text = "实际输出：左 0% · 右 0%", Foreground = Palette.TextBrush, FontFamily = new FontFamily("Consolas"), FontSize = 10.5, Margin = new Thickness(0, 3, 0, 0) };
             liveStatus.Children.Add(statusText);
             liveStatus.Children.Add(stepText);
             liveStatus.Children.Add(timeText);
+            liveStatus.Children.Add(actualOutputText);
             Grid.SetRow(liveStatus, 1);
             feedback.Children.Add(liveStatus);
             Grid liveContent = new Grid();
@@ -311,11 +316,11 @@ namespace ControllerLab
             rightSlider = MakeSlider(0, 100, 40);
             durationSlider = MakeSlider(0.1, 30, 5);
             durationSlider.TickFrequency = 0.1;
-            overallSlider = MakeSlider(0, 100, 60);
+            overallSlider = MakeSlider(0, 100, ControllerRumbleController.DefaultStrength * 100);
             body.Children.Add(SliderRow("左侧强度", leftSlider, "%"));
             body.Children.Add(SliderRow("右侧强度", rightSlider, "%"));
             body.Children.Add(SliderRow("手动持续时间", durationSlider, " 秒"));
-            body.Children.Add(SliderRow("预设总体缩放", overallSlider, "%"));
+            body.Children.Add(SliderRow("预设峰值强度（100%=满量程）", overallSlider, "%"));
             WrapPanel actions = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
             manualPlayButton = MakeButton("播放当前强度", true);
             manualPlayButton.Click += delegate { PlayManual(); };
@@ -337,7 +342,7 @@ namespace ControllerLab
                 presets.Children.Add(button);
             }
             body.Children.Add(presets);
-            body.Children.Add(new TextBlock { Text = "默认输出不超过 40%。用户主动提高强度后，高强度时间线会被自动缩短；单次播放绝不超过 30 秒。", Foreground = Palette.WarningBrush, FontSize = 10.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 0) });
+            body.Children.Add(new TextBlock { Text = "默认峰值为 40%；主动调到 100% 时会向底层请求满量程输出。高强度时间线会自动缩短，单次播放不超过 30 秒。若勾选设备校准，实际输出会按舒适上限限制，并以上方“实际输出”为准。", Foreground = Palette.WarningBrush, FontSize = 10.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 0) });
             return scroll;
         }
 
@@ -444,7 +449,8 @@ namespace ControllerLab
             durationSlider.Value = profile.DefaultDurationSeconds;
             applyCalibrationCheck.IsChecked = profile.ApplyDeviceCalibration;
             safetyCheck.IsChecked = profile.SafetyLimitsEnabled;
-            selectedPattern = FindAnyPattern(profile.LastPatternId) ?? selectedPattern;
+            RumblePatternDefinition lastPattern = FindAnyPattern(profile.LastPatternId);
+            if (lastPattern != null) selectedPattern = lastPattern.IsBuiltIn ? RumblePatternMath.ScaleToPeak(lastPattern, overallSlider.Value / 100.0) : lastPattern;
             RefreshCalibrationText();
         }
 
@@ -465,9 +471,10 @@ namespace ControllerLab
         {
             if (pattern == null || !CanPlay()) return;
             ApplyProfileControls();
-            selectedPattern = pattern;
+            RumblePatternDefinition playbackPattern = RumblePatternMath.ScaleToPeak(pattern, overallSlider.Value / 100.0);
+            selectedPattern = playbackPattern;
             string error;
-            if (!controller.PlayPattern(pattern, overallSlider.Value / 100.0, out error)) statusText.Text = error;
+            if (!controller.PlayPattern(playbackPattern, 1.0, out error)) statusText.Text = error;
             else SaveUsage(pattern.Id);
         }
 
@@ -478,7 +485,7 @@ namespace ControllerLab
             editingPattern.Name = string.IsNullOrWhiteSpace(customName.Text) ? "自定义时间线" : customName.Text.Trim();
             selectedPattern = editingPattern;
             string error;
-            if (!controller.PlayPattern(editingPattern, overallSlider.Value / 100.0, out error)) editorStatus.Text = error;
+            if (!controller.PlayPattern(editingPattern, 1.0, out error)) editorStatus.Text = error;
             else editorStatus.Text = "正在预览；紧急停止始终可用。";
         }
 
