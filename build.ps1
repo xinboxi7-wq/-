@@ -34,6 +34,8 @@ $compilerArgs = @(
     "/reference:$(Join-Path $framework 'System.Runtime.Serialization.dll')"
     (Join-Path $project 'ControllerCore.cs')
     (Join-Path $project 'ControllerRumble.cs')
+    (Join-Path $project 'RumbleProfessional.cs')
+    (Join-Path $project 'RumbleStudioPage.cs')
     (Join-Path $project 'JoystickAnalyzer.cs')
     (Join-Path $project 'JoystickTestViewModel.cs')
     (Join-Path $project 'JoystickTestPage.cs')

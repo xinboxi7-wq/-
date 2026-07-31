@@ -631,6 +631,7 @@ namespace ControllerLab
             public string DeviceId { get { return "xinput:0"; } }
             public bool IsSupported { get { return true; } }
             public string SupportDetails { get { return "selftest rumble"; } }
+            public RumbleCapabilities Capabilities { get { return new RumbleCapabilities { IsSupported = true, SupportsLeftMotor = true, SupportsRightMotor = true, SupportsIndependentChannels = true, MaximumSafeDuration = 30, VerifiedStatus = RumbleVerificationStatus.ImplementedUnverified }; } }
             public bool TrySetRumble(double leftStrength, double rightStrength, out string error) { error = string.Empty; return true; }
             public void StopRumble() { }
             public void Dispose() { }

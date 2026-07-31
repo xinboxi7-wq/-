@@ -752,6 +752,8 @@ namespace ControllerLab
         private volatile InputSnapshot latestInput = new InputSnapshot();
         private volatile ControllerState[] latestControllerStates = new ControllerState[0];
         private readonly ControllerRumbleController rumbleController;
+        private readonly RumbleSettingsStore rumbleSettingsStore;
+        private RumbleStudioPage rumbleStudioPage;
         private readonly JoystickTestViewModel joystickTestViewModel;
         private JoystickTestPage joystickTestPage;
         private readonly ControllerHealthReportStore healthReportStore;
@@ -787,6 +789,7 @@ namespace ControllerLab
             input = new InputManager();
             sonyInput = new SonyInputManager();
             rumbleController = new ControllerRumbleController(input, sonyInput);
+            rumbleSettingsStore = new RumbleSettingsStore();
             joystickTestViewModel = new JoystickTestViewModel();
             healthReportStore = new ControllerHealthReportStore();
             healthCheckViewModel = new ControllerHealthCheckViewModel(rumbleController, healthReportStore);
@@ -891,6 +894,7 @@ namespace ControllerLab
                 StopSampling();
                 if (joystickTestPage != null) joystickTestPage.Cancel("应用退出，摇杆检测已取消");
                 if (healthCheckView != null) healthCheckView.Dispose();
+                if (rumbleStudioPage != null) rumbleStudioPage.Dispose();
                 rumbleController.Dispose();
                 stickDriftTestEngine.Dispose();
                 if (joystickTestPage != null) joystickTestPage.Dispose();
@@ -1103,7 +1107,8 @@ namespace ControllerLab
             stickDriftTestPage.Visibility = Visibility.Collapsed;
             motionPage = BuildMotionPage();
             motionPage.Visibility = Visibility.Collapsed;
-            rumblePage = BuildRumbleTestPage();
+            rumbleStudioPage = new RumbleStudioPage(rumbleController, rumbleSettingsStore);
+            rumblePage = rumbleStudioPage;
             rumblePage.Visibility = Visibility.Collapsed;
             healthCheckView = new ControllerHealthCheckPage(healthCheckViewModel, healthReportStore);
             healthCheckPage = healthCheckView;
@@ -1785,7 +1790,7 @@ namespace ControllerLab
 
         private void StartRumblePattern(ControllerRumblePattern pattern)
         {
-            if (stickDriftTestEngine.IsActive || joystickTestViewModel.IsTestActive || healthCheckViewModel.IsRunning)
+            if (stickDriftTestEngine.IsActive || joystickTestViewModel.IsTestActive || healthCheckViewModel.IsQuietSamplingActive || IsMotionCalibrationActive(currentControllerState))
             {
                 if (rumbleStatusText != null)
                 {
@@ -1842,6 +1847,28 @@ namespace ControllerLab
         private void UpdateRumblePage(ControllerState controller)
         {
             if (rumblePage == null || rumblePage.Visibility != Visibility.Visible) return;
+            if (rumbleStudioPage != null)
+            {
+                string blockReason = string.Empty;
+                bool blocked = false;
+                if (stickDriftTestEngine.IsActive || joystickTestViewModel.IsTestActive)
+                {
+                    blocked = true;
+                    blockReason = "摇杆检测期间禁止震动，避免物理抖动污染采样。";
+                }
+                else if (IsMotionCalibrationActive(controller))
+                {
+                    blocked = true;
+                    blockReason = "陀螺仪静止校准期间禁止震动。";
+                }
+                else if (healthCheckViewModel.IsQuietSamplingActive)
+                {
+                    blocked = true;
+                    blockReason = "完整检测正在进行静止采样，禁止震动。";
+                }
+                rumbleStudioPage.Update(controller, blocked, blockReason);
+                return;
+            }
             RumbleStatusSnapshot snapshot = rumbleController.GetSnapshot();
             if (rumbleDeviceText != null) rumbleDeviceText.Text = BuildDeviceInputIdentity(controller);
             if (rumbleSupportText != null)
@@ -1872,8 +1899,16 @@ namespace ControllerLab
             }
         }
 
+        private bool IsMotionCalibrationActive(ControllerState controller)
+        {
+            if (controller == null || string.IsNullOrEmpty(controller.DeviceId)) return false;
+            MotionViewState motion = motionManager.Get(controller.DeviceId);
+            return motion != null && (motion.CalibrationState == MotionCalibrationState.Settling || motion.CalibrationState == MotionCalibrationState.Sampling);
+        }
+
         private void StartMotionCalibration()
         {
+            if (rumbleController.IsRunning) rumbleController.Stop("开始陀螺仪静止校准前，震动已自动停止");
             string reason;
             if (!motionManager.StartCalibration(currentControllerState == null ? string.Empty : currentControllerState.DeviceId, out reason))
             {
@@ -2008,7 +2043,11 @@ namespace ControllerLab
                 if (joystickTestPage != null) joystickTestPage.Cancel("已离开摇杆检测页面，检测已取消");
                 ClearStickTestVisualState();
             }
-            if (previousPage == 5 && page != 5) rumbleController.Stop("已离开震动测试页面，震动已停止");
+            if (previousPage == 5 && page != 5)
+            {
+                if (rumbleStudioPage != null) rumbleStudioPage.CancelForPageLeave();
+                else rumbleController.Stop("已离开震动测试页面，震动已停止");
+            }
             if (previousPage == 6 && page != 6 && healthCheckView != null) healthCheckView.CancelForPageLeave();
             homePage.Visibility = page == 0 ? Visibility.Visible : Visibility.Collapsed;
             visualizerPage.Visibility = page == 1 ? Visibility.Visible : Visibility.Collapsed;
@@ -3585,6 +3624,7 @@ namespace ControllerLab
 
         private void SelectDevice(string deviceId)
         {
+            if (rumbleStudioPage != null) rumbleStudioPage.ResetForDeviceChange();
             if (healthCheckView != null) healthCheckView.ResetForDeviceChange();
             rumbleController.Stop("设备已切换，震动已停止");
             selectedDeviceId = deviceId;
@@ -3613,6 +3653,7 @@ namespace ControllerLab
 
         private void SelectControllerFamily(ControllerFamily family)
         {
+            if (rumbleStudioPage != null) rumbleStudioPage.ResetForDeviceChange();
             if (healthCheckView != null) healthCheckView.ResetForDeviceChange();
             rumbleController.Stop("手柄类型已切换，震动已停止");
             selectedControllerFamily = family;
@@ -3684,6 +3725,7 @@ namespace ControllerLab
         private void SetDemoMode(bool enabled)
         {
             if (demoMode == enabled) return;
+            if (rumbleStudioPage != null) rumbleStudioPage.ResetForDeviceChange();
             if (healthCheckView != null) healthCheckView.ResetForDeviceChange();
             if (enabled)
             {

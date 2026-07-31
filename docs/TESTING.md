@@ -51,7 +51,7 @@
 .\ControllerLab_Test.exe --ds5-overlay-selftest
 .\ControllerLab_Test.exe --xbox-overlay-selftest
 
-# 震动输出构造 / 安全逻辑
+# 震动输出、时间线、配置与安全逻辑
 .\ControllerLab_Test.exe --rumble-selftest
 ```
 
@@ -73,7 +73,7 @@
 | `--ds5-motion-selftest` | 运动解析、CRC、融合边界 | 真实传感器精度 |
 | `--ds5-overlay-selftest` / `--xbox-overlay-selftest` | 逻辑舞台与区域边界 | 实机照片的肉眼对齐 |
 | `--trigger-chart-selftest` | 缓冲区与曲线逻辑 | 真实扳机噪声 |
-| `--rumble-selftest` | 输出映射、模式取消、停止保护 | 真实震感 / HID 写入兼容性 |
+| `--rumble-selftest` | 0% 停止、左右隔离、25 Hz 时间线插值、完成/取消/页面/异常归零、快速替换、预设持久化、损坏配置和不支持设备门控，以及 USB/BT 报告 | 真实震感 / HID 写入兼容性 |
 
 ## Xbox 实机回归
 
@@ -82,7 +82,7 @@
 3. 推动左右摇杆的中心、四向与四个斜向极限；确认摇杆帽位于前景、光环固定、回中重合。
 4. LT / RT 从 0% 缓慢到 100%，确认历史曲线连续且 LT 左→右、RT 右→左的视觉反馈正确。
 5. 完成按键测试和摇杆静止 / 范围测试；测试中故意触碰摇杆，确认结果被标记为无效而非严重漂移。完成后点击“保存实测记录”，确认 `%LocalAppData%\ControllerLab\stick-test-records\` 中生成同一记录 ID 的 `.json` 和 UTF-8 `.txt`，并在测试记录中注明文件名。
-6. 震动测试先使用默认 40% / 5 秒：验证左低频、右高频、均衡、渐强、脉冲和交替；设备断开、切换页面和退出应用时必须停止。
+6. 震动测试先使用默认 40% / 5 秒：验证左右隔离、14 个预设、时间线预览/暂停/紧急停止、自定义保存删除、四阶段校准；设备断开、切换页面和退出应用时必须停止。
 7. 进入“完整检测”，从开始页走到报告页；验证上一步、下一步、重测、跳过、取消，跳过项显示未检测，历史报告可重新读取并正确导出 JSON / Markdown。
 
 ## DualSense USB 实机回归

@@ -12,6 +12,8 @@ ControllerLab.sln
 ├─ ControllerLab.cs                     # Program、App、MainWindow、页面组合、Raw Input、Sony HID、视觉组件
 ├─ ControllerCore.cs                    # 统一状态、设备管理、按键/摇杆测试与报告模型
 ├─ ControllerRumble.cs                  # 统一震动接口、XInput / DualSense 输出、预设与安全控制
+├─ RumbleProfessional.cs                # 震动能力、时间线模型、播放器、设备配置和校准
+├─ RumbleStudioPage.cs                  # 原生 WPF 专业震动页与曲线编辑器
 ├─ DualSenseMotion.cs                   # MotionSample、静止校准、姿态融合
 ├─ DualSenseMotionVisual.cs             # DualSense 体感姿态可视化
 ├─ XboxOverlay.cs                       # Xbox 区域配置、渲染和校准窗口
@@ -96,8 +98,9 @@ Assets/dualsense.png + Assets/dualSenseRegions.json + Assets/dualSenseVisualStyl
 ## 震动输出流
 
 ```text
-震动测试 UI
-  → ControllerRumbleController（单任务、CancellationToken、安全停止）
+专业震动 UI / 完整健康检测
+  → ControllerRumbleController（保持既有服务入口和生命周期）
+  → RumblePatternPlayer（25 Hz、线性插值、暂停、单任务、CancellationToken）
   → ControllerRumbleServiceFactory
   ├─ XInputRumbleService → InputManager.TrySetVibration → XInputSetState
   └─ DualSenseRumbleService → DualSenseOutputReportBuilder
@@ -108,6 +111,8 @@ Assets/dualsense.png + Assets/dualSenseRegions.json + Assets/dualSenseVisualStyl
 - Xbox 左通道映射低频大马达，右通道映射高频小马达。
 - DualSense USB 与蓝牙输出报告分别构造和验证，不允许交叉发送。
 - 页面离开、设备切换 / 断开、异常和应用退出均应调用停止输出；同一设备同一时间只允许一个震动任务。
+- `RumbleCapabilities` 只暴露当前服务明确支持的左右电机、连接模式和验证状态；高级触觉和自适应扳机保持独立且未开放。
+- 设备配置位于 `%LocalAppData%\ControllerLab\rumble\`，设备文件只使用不可逆的稳定哈希键。
 
 ## 配置、资源、日志与测试
 
@@ -117,6 +122,7 @@ Assets/dualsense.png + Assets/dualSenseRegions.json + Assets/dualSenseVisualStyl
 | 离线工具 | `Tools/GenerateDualSenseRegions/`、`Tools/GenerateXboxTopRegions/`、`Tools/GenerateXboxDPadRegions/` | 开发期生成 / 审核工具，不是运行时依赖 |
 | 崩溃日志 | `%LocalAppData%\ControllerLab\logs\crash.log` | `App.RecordUnhandledException` 写入 |
 | 摇杆实测记录 | `%LocalAppData%\ControllerLab\stick-test-records\` | 用户在摇杆页保存的 JSON 结构记录和 UTF-8 中文 TXT 报告；仅接受完成的真实 XInput / DualSense HID 检测结果，同一 `EvidenceId` 的范围补充会更新同一对文件 |
+| 震动设备配置 | `%LocalAppData%\ControllerLab\rumble\` | 哈希设备配置、感知校准和自定义时间线 JSON |
 | 构建 | `build.ps1` | 调用本机 .NET Framework 4.8 x64 WPF 编译器 |
 | 可执行自检 | `ControllerLab.cs` 的命令行开关 | 启动、运行时、导航、核心、漂移、设备、触摸、运动、Overlay、扳机曲线和震动 |
 

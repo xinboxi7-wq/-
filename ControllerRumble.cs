@@ -22,6 +22,7 @@ namespace ControllerLab
         string DeviceId { get; }
         bool IsSupported { get; }
         string SupportDetails { get; }
+        RumbleCapabilities Capabilities { get; }
         bool TrySetRumble(double leftStrength, double rightStrength, out string error);
         void StopRumble();
     }
@@ -40,6 +41,13 @@ namespace ControllerLab
         public string Status = "等待开始";
         public bool LastOutputSucceeded;
         public DateTime LastStoppedUtc = DateTime.MinValue;
+        public RumbleCapabilities Capabilities = new RumbleCapabilities();
+        public bool IsPaused;
+        public double ElapsedSeconds;
+        public double TotalSeconds;
+        public double Progress;
+        public string PatternId = string.Empty;
+        public string CurrentStepLabel = "等待";
     }
 
     public sealed class XInputRumbleService : IControllerRumbleService
@@ -60,9 +68,26 @@ namespace ControllerLab
                 supportsLeft = input != null && input.CanSetVibration;
                 supportsRight = input != null && input.CanSetVibration;
             }
+            bool supported = input != null && input.CanSetVibration && playerIndex >= 0 && playerIndex < 4 && (supportsLeft || supportsRight);
+            Capabilities = new RumbleCapabilities
+            {
+                IsSupported = supported,
+                SupportsLeftMotor = supported && supportsLeft,
+                SupportsRightMotor = supported && supportsRight,
+                SupportsIndependentChannels = supported && supportsLeft && supportsRight,
+                SupportsAdvancedHaptics = false,
+                SupportsTriggerEffects = false,
+                SupportsUsb = state != null && state.ConnectionType == ControllerConnectionType.Wired,
+                SupportsBluetooth = state != null && state.ConnectionType == ControllerConnectionType.Bluetooth,
+                MaximumSafeDuration = ControllerRumbleController.MaximumDurationSeconds,
+                ConnectionMode = state == null ? "Unknown" : state.ConnectionTypeLabel,
+                VerifiedStatus = supported ? RumbleVerificationStatus.ImplementedUnverified : RumbleVerificationStatus.Unsupported,
+                Details = "XInput 双电机输出；当前仓库尚无可追溯实机验证记录"
+            };
         }
 
         public string DeviceId { get; private set; }
+        public RumbleCapabilities Capabilities { get; private set; }
         public bool IsSupported { get { return input != null && input.CanSetVibration && playerIndex >= 0 && playerIndex < 4 && (supportsLeft || supportsRight); } }
         public string SupportDetails
         {
@@ -123,9 +148,26 @@ namespace ControllerLab
             this.input = input;
             DeviceId = state == null ? string.Empty : state.DeviceId;
             connectionType = state == null ? ControllerConnectionType.Unknown : state.ConnectionType;
+            bool supported = input != null && !string.IsNullOrEmpty(DeviceId) && (connectionType == ControllerConnectionType.Wired || connectionType == ControllerConnectionType.Bluetooth);
+            Capabilities = new RumbleCapabilities
+            {
+                IsSupported = supported,
+                SupportsLeftMotor = supported,
+                SupportsRightMotor = supported,
+                SupportsIndependentChannels = supported,
+                SupportsAdvancedHaptics = false,
+                SupportsTriggerEffects = false,
+                SupportsUsb = connectionType == ControllerConnectionType.Wired,
+                SupportsBluetooth = connectionType == ControllerConnectionType.Bluetooth,
+                MaximumSafeDuration = ControllerRumbleController.MaximumDurationSeconds,
+                ConnectionMode = state == null ? "Unknown" : state.ConnectionTypeLabel,
+                VerifiedStatus = supported ? RumbleVerificationStatus.ImplementedUnverified : RumbleVerificationStatus.Unsupported,
+                Details = "仅开放基础兼容震动；高级触觉反馈与自适应扳机尚未开放"
+            };
         }
 
         public string DeviceId { get; private set; }
+        public RumbleCapabilities Capabilities { get; private set; }
         public bool IsSupported
         {
             get
@@ -185,11 +227,19 @@ namespace ControllerLab
         {
             DeviceId = state == null ? string.Empty : state.DeviceId;
             SupportDetails = string.IsNullOrEmpty(details) ? "当前设备不支持震动" : details;
+            Capabilities = new RumbleCapabilities
+            {
+                IsSupported = false,
+                ConnectionMode = state == null ? "Unknown" : state.ConnectionTypeLabel,
+                VerifiedStatus = RumbleVerificationStatus.Unsupported,
+                Details = SupportDetails
+            };
         }
 
         public string DeviceId { get; private set; }
         public bool IsSupported { get { return false; } }
         public string SupportDetails { get; private set; }
+        public RumbleCapabilities Capabilities { get; private set; }
 
         public bool TrySetRumble(double leftStrength, double rightStrength, out string error)
         {
@@ -303,6 +353,7 @@ namespace ControllerLab
         private readonly object sync = new object();
         private readonly InputManager xbox;
         private readonly SonyInputManager sony;
+        private readonly RumblePatternPlayer patternPlayer = new RumblePatternPlayer();
         private IControllerRumbleService service;
         private CancellationTokenSource cancellation;
         private Task activeTask;
@@ -316,6 +367,8 @@ namespace ControllerLab
         private string status = "等待开始";
         private bool lastOutputSucceeded;
         private DateTime lastStoppedUtc = DateTime.MinValue;
+        private RumbleDeviceProfile deviceProfile;
+        private bool usingPatternPlayer;
 
         public ControllerRumbleController(InputManager xbox, SonyInputManager sony)
         {
@@ -330,8 +383,27 @@ namespace ControllerLab
             deviceId = service.DeviceId;
         }
 
-        public bool IsRunning { get { lock (sync) return running; } }
-        public DateTime LastStoppedUtc { get { lock (sync) return lastStoppedUtc; } }
+        public bool IsRunning { get { lock (sync) return running || patternPlayer.IsRunning; } }
+        public DateTime LastStoppedUtc
+        {
+            get
+            {
+                DateTime legacy;
+                lock (sync) legacy = lastStoppedUtc;
+                DateTime professional = patternPlayer.GetSnapshot().LastStoppedUtc;
+                return legacy >= professional ? legacy : professional;
+            }
+        }
+
+        public RumbleCapabilities GetCapabilities()
+        {
+            lock (sync) return service == null || service.Capabilities == null ? new RumbleCapabilities() : service.Capabilities.Copy();
+        }
+
+        public void SetDeviceProfile(RumbleDeviceProfile profile)
+        {
+            lock (sync) deviceProfile = profile == null ? null : profile.Copy();
+        }
 
         public void Synchronize(ControllerState state)
         {
@@ -349,22 +421,14 @@ namespace ControllerLab
                 deviceId = nextId;
                 status = state == null || !state.IsConnected ? "设备未连接" : "等待开始";
                 lastOutputSucceeded = false;
+                usingPatternPlayer = false;
+                deviceProfile = null;
             }
             if (old != null) old.Dispose();
         }
 
         public bool Start(ControllerRumblePattern requestedPattern, double leftStrength, double rightStrength, double overallStrength, double durationSeconds, out string error)
         {
-            error = null;
-            IControllerRumbleService current;
-            lock (sync) current = service;
-            if (current == null || !current.IsSupported)
-            {
-                error = current == null ? "当前设备不支持震动" : current.SupportDetails;
-                lock (sync) status = error;
-                return false;
-            }
-
             double left = Clamp01(leftStrength) * Clamp01(overallStrength);
             double right = Clamp01(rightStrength) * Clamp01(overallStrength);
             if (requestedPattern == ControllerRumblePattern.LeftOnly) right = 0;
@@ -375,29 +439,47 @@ namespace ControllerLab
                 right = 0.5 * Clamp01(overallStrength);
             }
             double duration = Math.Max(0.1, Math.Min(MaximumDurationSeconds, durationSeconds));
+            RumblePatternDefinition definition = RumblePatternCatalog.FromLegacy(requestedPattern, left, right, duration);
+            bool started = PlayPatternInternal(definition, 1.0, out error);
+            lock (sync) pattern = requestedPattern;
+            return started;
+        }
 
+        public bool PlayPattern(RumblePatternDefinition definition, double overallStrength, out string error)
+        {
+            bool started = PlayPatternInternal(definition, overallStrength, out error);
+            lock (sync) pattern = ControllerRumblePattern.Manual;
+            return started;
+        }
+
+        public bool Pause(out string reason) { return patternPlayer.Pause(out reason); }
+        public bool Resume(out string reason) { return patternPlayer.Resume(out reason); }
+
+        private bool PlayPatternInternal(RumblePatternDefinition definition, double overallStrength, out string error)
+        {
+            IControllerRumbleService current;
+            RumbleDeviceProfile profile;
+            lock (sync) { current = service; profile = deviceProfile == null ? null : deviceProfile.Copy(); }
+            if (current == null || !current.IsSupported || current.Capabilities == null || !current.Capabilities.IsSupported)
+            {
+                error = current == null ? "当前设备不支持震动" : current.SupportDetails;
+                lock (sync) status = error;
+                return false;
+            }
             Stop("已切换震动模式");
-            int ownGeneration;
-            CancellationTokenSource ownCancellation = new CancellationTokenSource();
+            bool started = patternPlayer.Start(current, definition, overallStrength, profile, out error);
             lock (sync)
             {
-                generation++;
-                ownGeneration = generation;
-                cancellation = ownCancellation;
-                running = true;
-                pattern = requestedPattern;
-                currentLeft = 0;
-                currentRight = 0;
-                remainingSeconds = duration;
-                status = "正在启动震动";
+                usingPatternPlayer = started;
+                status = started ? "正在启动震动" : error;
                 lastOutputSucceeded = false;
-                activeTask = Task.Run(() => PlayAsync(current, requestedPattern, left, right, duration, ownGeneration, ownCancellation.Token));
             }
-            return true;
+            return started;
         }
 
         public void Stop(string reason)
         {
+            patternPlayer.Stop(reason);
             CancellationTokenSource oldCancellation;
             Task oldTask;
             IControllerRumbleService current;
@@ -433,6 +515,32 @@ namespace ControllerLab
         {
             lock (sync)
             {
+                if (usingPatternPlayer)
+                {
+                    RumblePatternPlayerSnapshot professional = patternPlayer.GetSnapshot();
+                    return new RumbleStatusSnapshot
+                    {
+                        DeviceId = deviceId,
+                        IsSupported = service != null && service.IsSupported,
+                        SupportDetails = service == null ? "当前设备不支持震动" : service.SupportDetails,
+                        Capabilities = service == null || service.Capabilities == null ? new RumbleCapabilities() : service.Capabilities.Copy(),
+                        IsRunning = professional.IsRunning,
+                        IsPaused = professional.IsPaused,
+                        LeftStrength = professional.LeftStrength,
+                        RightStrength = professional.RightStrength,
+                        RemainingSeconds = professional.RemainingSeconds,
+                        ElapsedSeconds = professional.ElapsedSeconds,
+                        TotalSeconds = professional.TotalSeconds,
+                        Progress = professional.Progress,
+                        Pattern = pattern,
+                        PatternId = professional.PatternId,
+                        PatternLabel = professional.PatternName,
+                        CurrentStepLabel = professional.CurrentStepLabel,
+                        Status = professional.Status,
+                        LastOutputSucceeded = professional.LastOutputSucceeded,
+                        LastStoppedUtc = professional.LastStoppedUtc
+                    };
+                }
                 return new RumbleStatusSnapshot
                 {
                     DeviceId = deviceId,
@@ -446,7 +554,9 @@ namespace ControllerLab
                     PatternLabel = PatternLabel(pattern),
                     Status = status,
                     LastOutputSucceeded = lastOutputSucceeded,
-                    LastStoppedUtc = lastStoppedUtc
+                    LastStoppedUtc = lastStoppedUtc,
+                    Capabilities = service == null || service.Capabilities == null ? new RumbleCapabilities() : service.Capabilities.Copy(),
+                    CurrentStepLabel = status
                 };
             }
         }
@@ -566,6 +676,7 @@ namespace ControllerLab
         public void Dispose()
         {
             Stop("应用退出，震动已停止");
+            patternPlayer.Dispose();
             IControllerRumbleService current;
             lock (sync)
             {
@@ -630,6 +741,7 @@ namespace ControllerLab
             Require(ControllerRumbleController.DefaultDurationSeconds <= 5.0, "default duration safety failed");
             Require(ControllerRumbleController.MaximumDurationSeconds == 30.0, "maximum duration safety failed");
             passed.Add("safety-limits");
+            passed.Add(RumbleProfessionalSelfTest.Run());
             return string.Join(", ", passed.ToArray());
         }
 
@@ -643,6 +755,7 @@ namespace ControllerLab
             public string DeviceId { get { return "selftest"; } }
             public bool IsSupported { get { return true; } }
             public string SupportDetails { get { return "selftest"; } }
+            public RumbleCapabilities Capabilities { get { return new RumbleCapabilities { IsSupported = true, SupportsLeftMotor = true, SupportsRightMotor = true, SupportsIndependentChannels = true, MaximumSafeDuration = 30, VerifiedStatus = RumbleVerificationStatus.ImplementedUnverified }; } }
             public double Left;
             public double Right;
             public int StopCount;

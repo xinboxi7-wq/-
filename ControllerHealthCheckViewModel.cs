@@ -97,6 +97,15 @@ namespace ControllerLab
         public int EstimatedSeconds { get; private set; }
         public bool AwaitingRumbleFeedback { get { return awaitingRumbleFeedback; } }
         public string RumblePrompt { get; private set; }
+        public bool IsQuietSamplingActive
+        {
+            get
+            {
+                HealthCheckStep step = CurrentStep;
+                if (!IsRunning || step == null || step.Status != HealthCheckStepStatus.Testing) return false;
+                return step.Kind == HealthCheckStepKind.LeftStickStationary || step.Kind == HealthCheckStepKind.RightStickStationary || step.Kind == HealthCheckStepKind.Gyroscope;
+            }
+        }
 
         public HealthCheckStep CurrentStep
         {

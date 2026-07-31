@@ -18,7 +18,7 @@
 | 按键、D-pad、左右摇杆 | Implemented, unverified | 统一映射到 `ControllerState`。 |
 | LT / RT | Implemented, unverified | 归一化后用于可视化、曲线和测试。 |
 | 电量 | Partially supported | 使用 XInput 电池 API；USB、第三方驱动和接收器可能返回未知。 |
-| 左右震动 | Implemented, unverified | 左=低频大马达，右=高频小马达；调用 `XInputSetState`。 |
+| 左右震动 | Implemented, unverified | 左=低频大马达，右=高频小马达；调用 `XInputSetState`。专业时间线、校准和安全停止已有构造自检，但当前环境没有 Xbox 实机记录。 |
 | Guide / Share / Elite Paddles | Partially supported | 公共模型包含能力字段；是否可读取取决于 XInput 版本及设备。 |
 | 触摸、陀螺仪、加速度计 | Unsupported | 当前 Xbox / XInput 路径不提供这些能力。 |
 
@@ -38,7 +38,7 @@
 | 单指 / 双指触点 | Implemented, unverified | Partially supported | USB 完整 `0x01` 和蓝牙完整 `0x31` 最多解析两点；蓝牙紧凑兼容 `0x01` 明确不可用。 |
 | 陀螺仪 / 加速度计 | Implemented, unverified | Partially supported | 完整 USB / BT 报告支持；BT 需 CRC 通过；紧凑兼容报告不支持。 |
 | 电量 | Partially supported | Partially supported | 依赖当前 HID 报告提供的状态字段。 |
-| 基础双通道震动 | Implemented, unverified | Implemented, unverified | USB `0x02` 长度 63；BT `0x31` 长度 78 且含 CRC；尚待实机输出确认。 |
+| 基础双通道震动 | Implemented, unverified | Implemented, unverified | USB `0x02` 长度 63；BT `0x31` 长度 78 且含 CRC；两种模式均尚待实机输出确认。 |
 | 高级触觉反馈 | Unsupported | Unsupported | 当前震动模块只实现基础双通道输出。 |
 | 自适应扳机 | Unsupported | Unsupported | 当前没有输出控制实现。 |
 | 灯带控制 | Unsupported | Unsupported | 状态模型保留 Lightbar 字段；没有控制 UI / 输出实现。 |
