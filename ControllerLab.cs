@@ -206,6 +206,11 @@ namespace ControllerLab
                 Console.WriteLine(TriggerTelemetryBuffer.RunSelfTest());
                 return;
             }
+            if (HasArgument("--rumble-selftest"))
+            {
+                Console.WriteLine(ControllerRumbleSelfTest.Run());
+                return;
+            }
             if (HasArgument("--controller-core-selftest"))
             {
                 Console.WriteLine(ControllerCoreSelfTest.Run());
@@ -601,6 +606,7 @@ namespace ControllerLab
         private UIElement inputTestPage;
         private UIElement stickDriftTestPage;
         private UIElement motionPage;
+        private UIElement rumblePage;
         private int currentPage = 1;
         private bool controllerNavigationEnabled;
         private bool controllerNavigationComboLatched;
@@ -621,6 +627,7 @@ namespace ControllerLab
         private Button homePageButton;
         private Button stickDriftPageButton;
         private Button motionPageButton;
+        private Button rumblePageButton;
         private Button inputTestPageButton;
         private WrapPanel inputTestChipPanel;
         private TextBlock inputTestProgressText;
@@ -667,6 +674,24 @@ namespace ControllerLab
         private Button motionResetButton;
         private CheckBox motionSmoothingCheck;
         private CheckBox motionRawLoggingCheck;
+        private Slider rumbleLeftSlider;
+        private Slider rumbleRightSlider;
+        private Slider rumbleOverallSlider;
+        private Slider rumbleDurationSlider;
+        private TextBlock rumbleLeftValueText;
+        private TextBlock rumbleRightValueText;
+        private TextBlock rumbleOverallValueText;
+        private TextBlock rumbleDurationValueText;
+        private TextBlock rumbleDeviceText;
+        private TextBlock rumbleSupportText;
+        private TextBlock rumbleStatusText;
+        private TextBlock rumbleRemainingText;
+        private TextBlock rumblePatternText;
+        private Border rumbleLeftVisual;
+        private Border rumbleRightVisual;
+        private Button rumbleStartButton;
+        private Button rumbleStopButton;
+        private readonly List<Button> rumblePatternButtons = new List<Button>();
         private DateTime nextMotionUiRefresh = DateTime.MinValue;
         private string selectedDeviceId;
         private HwndSource rawInputSource;
@@ -713,6 +738,7 @@ namespace ControllerLab
         private volatile bool sampling;
         private volatile InputSnapshot latestInput = new InputSnapshot();
         private volatile ControllerState[] latestControllerStates = new ControllerState[0];
+        private readonly ControllerRumbleController rumbleController;
 
         [DllImport("winmm.dll")]
         private static extern uint timeBeginPeriod(uint period);
@@ -742,6 +768,7 @@ namespace ControllerLab
             demoMode = HasArgument("--demo") || sonyDemoMode || multiDemoMode;
             input = new InputManager();
             sonyInput = new SonyInputManager();
+            rumbleController = new ControllerRumbleController(input, sonyInput);
             deviceManager = new ControllerDeviceManager(input, sonyInput);
             motionManager = new DualSenseMotionManager();
             Title = "手柄实验室";
@@ -834,11 +861,13 @@ namespace ControllerLab
                 if (HasArgument("--ds5-calibrate")) Dispatcher.BeginInvoke(new Action(OpenDualSenseCalibration), DispatcherPriority.Background);
                 if (HasArgument("--xbox-calibrate")) Dispatcher.BeginInvoke(new Action(OpenXboxCalibration), DispatcherPriority.Background);
                 if (HasArgument("--visualizer")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(1); }), DispatcherPriority.Background);
+                if (HasArgument("--rumble-page")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(5); }), DispatcherPriority.Background);
             };
             Closed += delegate
             {
                 StopRenderLoop();
                 StopSampling();
+                rumbleController.Dispose();
                 stickDriftTestEngine.Dispose();
                 if (!demoMode) SaveSettings();
                 if (deviceHomeView != null) deviceHomeView.Dispose();
@@ -1047,12 +1076,15 @@ namespace ControllerLab
             stickDriftTestPage.Visibility = Visibility.Collapsed;
             motionPage = BuildMotionPage();
             motionPage.Visibility = Visibility.Collapsed;
+            rumblePage = BuildRumbleTestPage();
+            rumblePage.Visibility = Visibility.Collapsed;
             pageHost = new Grid();
             pageHost.Children.Add(homePage);
             pageHost.Children.Add(visualizerPage);
             pageHost.Children.Add(inputTestPage);
             pageHost.Children.Add(stickDriftTestPage);
             pageHost.Children.Add(motionPage);
+            pageHost.Children.Add(rumblePage);
             Grid.SetRow(pageHost, 1);
             root.Children.Add(pageHost);
             shellContent = pageHost;
@@ -1491,6 +1523,322 @@ namespace ControllerLab
             return LabVisualStyles.CreateSectionCard(expander);
         }
 
+        private UIElement BuildRumbleTestPage()
+        {
+            Grid page = new Grid { Margin = new Thickness(32, 24, 32, 0) };
+            page.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(18) });
+            page.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            StackPanel heading = new StackPanel();
+            heading.Children.Add(LabVisualStyles.CreatePageTitle("震动测试"));
+            TextBlock subtitle = LabVisualStyles.CreateSecondaryText("Xbox 使用 XInput 双电机；DualSense 使用独立 USB / 蓝牙 HID 输出。离开页面、切换设备、断开或异常时都会自动停止。");
+            subtitle.FontSize = 14;
+            subtitle.Margin = new Thickness(0, 7, 0, 0);
+            heading.Children.Add(subtitle);
+            rumbleDeviceText = new TextBlock { Text = "设备：未连接", Foreground = Palette.MutedBrush, FontFamily = new FontFamily("Consolas"), FontSize = 10.5, Margin = new Thickness(0, 5, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+            heading.Children.Add(rumbleDeviceText);
+            page.Children.Add(heading);
+
+            Grid body = new Grid();
+            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(410) });
+
+            Grid visualCard = new Grid { Margin = new Thickness(28, 22, 28, 22) };
+            visualCard.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            visualCard.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            visualCard.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            visualCard.Children.Add(new TextBlock { Text = "双通道实时反馈", Foreground = Palette.TextBrush, FontSize = 18, FontWeight = FontWeights.SemiBold });
+
+            Grid grips = new Grid { Margin = new Thickness(18, 16, 18, 16) };
+            grips.ColumnDefinitions.Add(new ColumnDefinition());
+            grips.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
+            grips.ColumnDefinitions.Add(new ColumnDefinition());
+            rumbleLeftVisual = BuildRumbleGrip("左侧低频", Palette.Blue, -9);
+            grips.Children.Add(rumbleLeftVisual);
+            rumbleRightVisual = BuildRumbleGrip("右侧高频", Palette.Blue, 9);
+            Grid.SetColumn(rumbleRightVisual, 2);
+            grips.Children.Add(rumbleRightVisual);
+            Grid.SetRow(grips, 1);
+            visualCard.Children.Add(grips);
+
+            Grid liveStatus = new Grid { Margin = new Thickness(0, 6, 0, 0) };
+            liveStatus.ColumnDefinitions.Add(new ColumnDefinition());
+            liveStatus.ColumnDefinitions.Add(new ColumnDefinition());
+            liveStatus.ColumnDefinitions.Add(new ColumnDefinition());
+            rumblePatternText = BuildRumbleMetric(liveStatus, 0, "当前预设", "未运行");
+            rumbleRemainingText = BuildRumbleMetric(liveStatus, 1, "剩余时间", "0.0 秒");
+            rumbleStatusText = BuildRumbleMetric(liveStatus, 2, "输出状态", "等待开始");
+            Grid.SetRow(liveStatus, 2);
+            visualCard.Children.Add(liveStatus);
+            body.Children.Add(LabVisualStyles.CreateSectionCard(visualCard));
+
+            StackPanel controls = new StackPanel();
+            Border supportCard = BuildRumbleSupportCard();
+            supportCard.Margin = new Thickness(0, 0, 0, 12);
+            controls.Children.Add(supportCard);
+            Border motorCard = BuildRumbleMotorControls();
+            motorCard.Margin = new Thickness(0, 0, 0, 12);
+            controls.Children.Add(motorCard);
+            Border modeCard = BuildRumbleModeControls();
+            controls.Children.Add(modeCard);
+            ScrollViewer controlScroller = new ScrollViewer
+            {
+                Content = controls,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+            };
+            Grid.SetColumn(controlScroller, 2);
+            body.Children.Add(controlScroller);
+
+            Grid.SetRow(body, 2);
+            page.Children.Add(body);
+            return page;
+        }
+
+        private Border BuildRumbleGrip(string label, Color accent, double angle)
+        {
+            Grid content = new Grid();
+            content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            content.Children.Add(new TextBlock
+            {
+                Text = "≈",
+                Foreground = new SolidColorBrush(Color.FromArgb(190, accent.R, accent.G, accent.B)),
+                FontSize = 72,
+                FontWeight = FontWeights.Light,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            TextBlock text = new TextBlock { Text = label, Foreground = Palette.TextBrush, FontSize = 14, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 18) };
+            Grid.SetRow(text, 1);
+            content.Children.Add(text);
+            Border grip = new Border
+            {
+                Width = 190,
+                Height = 300,
+                CornerRadius = new CornerRadius(88, 88, 70, 70),
+                Background = new SolidColorBrush(Color.FromArgb(90, accent.R, accent.G, accent.B)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(180, accent.R, accent.G, accent.B)),
+                BorderThickness = new Thickness(1.5),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = content,
+                Opacity = 0.14,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new RotateTransform(angle)
+            };
+            return grip;
+        }
+
+        private static TextBlock BuildRumbleMetric(Grid host, int column, string label, string initial)
+        {
+            StackPanel item = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            item.Children.Add(new TextBlock { Text = label, Foreground = Palette.MutedBrush, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center });
+            TextBlock value = new TextBlock { Text = initial, Foreground = Palette.TextBrush, FontSize = 14, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 180, Margin = new Thickness(0, 3, 0, 0) };
+            item.Children.Add(value);
+            Grid.SetColumn(item, column);
+            host.Children.Add(item);
+            return value;
+        }
+
+        private Border BuildRumbleSupportCard()
+        {
+            StackPanel card = new StackPanel { Margin = new Thickness(18, 15, 18, 15) };
+            card.Children.Add(new TextBlock { Text = "设备能力", Foreground = Palette.TextBrush, FontSize = 18, FontWeight = FontWeights.SemiBold });
+            rumbleSupportText = new TextBlock { Text = "连接真实手柄后检查震动支持。", Foreground = Palette.MutedBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap, LineHeight = 19, Margin = new Thickness(0, 9, 0, 0) };
+            card.Children.Add(rumbleSupportText);
+            return LabVisualStyles.CreateMetricCard(card);
+        }
+
+        private Border BuildRumbleMotorControls()
+        {
+            StackPanel card = new StackPanel { Margin = new Thickness(18, 15, 18, 16) };
+            card.Children.Add(new TextBlock { Text = "强度与时长", Foreground = Palette.TextBrush, FontSize = 18, FontWeight = FontWeights.SemiBold });
+            rumbleLeftSlider = CreateRumbleSlider(0, 100, 40, out rumbleLeftValueText);
+            card.Children.Add(BuildRumbleSliderRow("左侧震动强度", rumbleLeftSlider, rumbleLeftValueText, "%"));
+            rumbleRightSlider = CreateRumbleSlider(0, 100, 40, out rumbleRightValueText);
+            card.Children.Add(BuildRumbleSliderRow("右侧震动强度", rumbleRightSlider, rumbleRightValueText, "%"));
+            rumbleOverallSlider = CreateRumbleSlider(0, 100, 100, out rumbleOverallValueText);
+            card.Children.Add(BuildRumbleSliderRow("总体强度", rumbleOverallSlider, rumbleOverallValueText, "%"));
+            rumbleDurationSlider = CreateRumbleSlider(1, 30, 5, out rumbleDurationValueText);
+            rumbleDurationSlider.TickFrequency = 1;
+            rumbleDurationSlider.IsSnapToTickEnabled = true;
+            card.Children.Add(BuildRumbleSliderRow("持续时间（最大 30 秒）", rumbleDurationSlider, rumbleDurationValueText, " 秒"));
+            return LabVisualStyles.CreateSectionCard(card);
+        }
+
+        private Slider CreateRumbleSlider(double minimum, double maximum, double value, out TextBlock valueText)
+        {
+            Slider slider = new Slider
+            {
+                Minimum = minimum,
+                Maximum = maximum,
+                Value = value,
+                Height = 24,
+                Foreground = Palette.BlueBrush,
+                IsMoveToPointEnabled = true
+            };
+            valueText = new TextBlock { Text = value.ToString("0", CultureInfo.InvariantCulture), Foreground = Palette.BlueBrush, FontSize = 13, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            TextBlock captured = valueText;
+            slider.ValueChanged += delegate { captured.Text = slider.Value.ToString("0", CultureInfo.InvariantCulture); };
+            return slider;
+        }
+
+        private static UIElement BuildRumbleSliderRow(string label, Slider slider, TextBlock value, string suffix)
+        {
+            StackPanel row = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+            Grid heading = new Grid();
+            heading.ColumnDefinitions.Add(new ColumnDefinition());
+            heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            heading.Children.Add(new TextBlock { Text = label, Foreground = Palette.MutedBrush, FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+            StackPanel valueHost = new StackPanel { Orientation = Orientation.Horizontal };
+            valueHost.Children.Add(value);
+            valueHost.Children.Add(new TextBlock { Text = suffix, Foreground = Palette.MutedBrush, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 0) });
+            Grid.SetColumn(valueHost, 1);
+            heading.Children.Add(valueHost);
+            row.Children.Add(heading);
+            row.Children.Add(slider);
+            return row;
+        }
+
+        private Border BuildRumbleModeControls()
+        {
+            StackPanel card = new StackPanel { Margin = new Thickness(18, 15, 18, 16) };
+            card.Children.Add(new TextBlock { Text = "测试模式", Foreground = Palette.TextBrush, FontSize = 18, FontWeight = FontWeights.SemiBold });
+            WrapPanel presets = new WrapPanel { Margin = new Thickness(0, 9, 0, 0) };
+            AddRumblePatternButton(presets, "左侧单独", ControllerRumblePattern.LeftOnly);
+            AddRumblePatternButton(presets, "右侧单独", ControllerRumblePattern.RightOnly);
+            AddRumblePatternButton(presets, "均衡震动", ControllerRumblePattern.Balanced);
+            AddRumblePatternButton(presets, "左右交替", ControllerRumblePattern.Alternating);
+            AddRumblePatternButton(presets, "渐强测试", ControllerRumblePattern.Ramp);
+            AddRumblePatternButton(presets, "脉冲测试", ControllerRumblePattern.Pulse);
+            card.Children.Add(presets);
+
+            Grid primary = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+            primary.ColumnDefinitions.Add(new ColumnDefinition());
+            primary.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
+            primary.ColumnDefinitions.Add(new ColumnDefinition());
+            rumbleStartButton = MakeButton("开始震动", true);
+            rumbleStartButton.Height = 36;
+            rumbleStartButton.Click += delegate { StartRumblePattern(ControllerRumblePattern.Manual); };
+            primary.Children.Add(rumbleStartButton);
+            rumbleStopButton = MakeButton("停止震动", false);
+            rumbleStopButton.Height = 36;
+            rumbleStopButton.Click += delegate { StopRumble("用户已停止震动"); };
+            Grid.SetColumn(rumbleStopButton, 2);
+            primary.Children.Add(rumbleStopButton);
+            card.Children.Add(primary);
+            Button reset = MakeButton("恢复默认（40% · 5 秒）", false);
+            reset.Height = 32;
+            reset.Margin = new Thickness(0, 8, 0, 0);
+            reset.Click += delegate { ResetRumbleControls(); };
+            card.Children.Add(reset);
+            return LabVisualStyles.CreateSectionCard(card);
+        }
+
+        private void AddRumblePatternButton(Panel host, string label, ControllerRumblePattern pattern)
+        {
+            Button button = MakeButton(label, false);
+            button.Height = 32;
+            button.FontSize = 11;
+            button.Padding = new Thickness(9, 4, 9, 4);
+            button.Margin = new Thickness(0, 0, 7, 7);
+            button.Click += delegate { StartRumblePattern(pattern); };
+            rumblePatternButtons.Add(button);
+            host.Children.Add(button);
+        }
+
+        private void StartRumblePattern(ControllerRumblePattern pattern)
+        {
+            if (stickDriftTestEngine.IsActive)
+            {
+                if (rumbleStatusText != null)
+                {
+                    rumbleStatusText.Text = "漂移检测期间不能进行震动测试";
+                    rumbleStatusText.Foreground = Palette.WarningBrush;
+                }
+                if (footerStatus != null) footerStatus.Text = "漂移检测期间不能进行震动测试，避免物理抖动污染采样结果。";
+                return;
+            }
+            RumbleStatusSnapshot snapshot = rumbleController.GetSnapshot();
+            if (!snapshot.IsSupported)
+            {
+                if (rumbleStatusText != null)
+                {
+                    rumbleStatusText.Text = snapshot.SupportDetails;
+                    rumbleStatusText.Foreground = Palette.WarningBrush;
+                }
+                if (footerStatus != null) footerStatus.Text = snapshot.SupportDetails;
+                return;
+            }
+            double left = rumbleLeftSlider == null ? ControllerRumbleController.DefaultStrength : rumbleLeftSlider.Value / 100.0;
+            double right = rumbleRightSlider == null ? ControllerRumbleController.DefaultStrength : rumbleRightSlider.Value / 100.0;
+            double overall = rumbleOverallSlider == null ? 1.0 : rumbleOverallSlider.Value / 100.0;
+            double duration = rumbleDurationSlider == null ? ControllerRumbleController.DefaultDurationSeconds : rumbleDurationSlider.Value;
+            string error;
+            if (!rumbleController.Start(pattern, left, right, overall, duration, out error))
+            {
+                if (rumbleStatusText != null)
+                {
+                    rumbleStatusText.Text = error;
+                    rumbleStatusText.Foreground = Palette.RedBrush;
+                }
+                if (footerStatus != null) footerStatus.Text = error;
+                return;
+            }
+            if (footerStatus != null) footerStatus.Text = "震动测试已启动；可随时点击“停止震动”。";
+        }
+
+        private void StopRumble(string reason)
+        {
+            rumbleController.Stop(reason);
+            if (footerStatus != null) footerStatus.Text = reason;
+        }
+
+        private void ResetRumbleControls()
+        {
+            StopRumble("已恢复默认并停止震动");
+            if (rumbleLeftSlider != null) rumbleLeftSlider.Value = 40;
+            if (rumbleRightSlider != null) rumbleRightSlider.Value = 40;
+            if (rumbleOverallSlider != null) rumbleOverallSlider.Value = 100;
+            if (rumbleDurationSlider != null) rumbleDurationSlider.Value = 5;
+        }
+
+        private void UpdateRumblePage(ControllerState controller)
+        {
+            if (rumblePage == null || rumblePage.Visibility != Visibility.Visible) return;
+            RumbleStatusSnapshot snapshot = rumbleController.GetSnapshot();
+            if (rumbleDeviceText != null) rumbleDeviceText.Text = BuildDeviceInputIdentity(controller);
+            if (rumbleSupportText != null)
+            {
+                rumbleSupportText.Text = snapshot.SupportDetails;
+                rumbleSupportText.Foreground = snapshot.IsSupported ? Palette.TextBrush : Palette.WarningBrush;
+            }
+            if (rumblePatternText != null) rumblePatternText.Text = snapshot.IsRunning ? snapshot.PatternLabel : "未运行";
+            if (rumbleRemainingText != null) rumbleRemainingText.Text = snapshot.RemainingSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " 秒";
+            if (rumbleStatusText != null)
+            {
+                rumbleStatusText.Text = snapshot.Status;
+                rumbleStatusText.Foreground = snapshot.IsRunning
+                    ? Palette.BlueBrush
+                    : snapshot.LastOutputSucceeded ? Palette.GreenBrush : snapshot.IsSupported ? Palette.MutedBrush : Palette.WarningBrush;
+            }
+            if (rumbleLeftVisual != null) rumbleLeftVisual.Opacity = 0.14 + snapshot.LeftStrength * 0.86;
+            if (rumbleRightVisual != null) rumbleRightVisual.Opacity = 0.14 + snapshot.RightStrength * 0.86;
+            bool driftActive = stickDriftTestEngine.IsActive;
+            bool enabled = snapshot.IsSupported && controller != null && controller.IsConnected && controller.HasRealInput && !driftActive;
+            if (rumbleStartButton != null) rumbleStartButton.IsEnabled = enabled && !snapshot.IsRunning;
+            if (rumbleStopButton != null) rumbleStopButton.IsEnabled = snapshot.IsRunning;
+            for (int i = 0; i < rumblePatternButtons.Count; i++) rumblePatternButtons[i].IsEnabled = enabled && !snapshot.IsRunning;
+            if (driftActive && rumbleStatusText != null)
+            {
+                rumbleStatusText.Text = "漂移检测期间不能进行震动测试";
+                rumbleStatusText.Foreground = Palette.WarningBrush;
+            }
+        }
+
         private void StartMotionCalibration()
         {
             string reason;
@@ -1617,25 +1965,30 @@ namespace ControllerLab
 
         private void ShowPage(int page)
         {
-            if (homePage == null || visualizerPage == null || inputTestPage == null || stickDriftTestPage == null || motionPage == null) return;
-            currentPage = Math.Max(0, Math.Min(4, page));
+            if (homePage == null || visualizerPage == null || inputTestPage == null || stickDriftTestPage == null || motionPage == null || rumblePage == null) return;
+            int previousPage = currentPage;
+            currentPage = Math.Max(0, Math.Min(5, page));
             page = currentPage;
             if (page != 3)
             {
                 if (stickDriftTestEngine.IsActive) stickDriftTestEngine.Cancel("已离开摇杆检测页面，检测未完成");
                 ClearStickTestVisualState();
             }
+            if (previousPage == 5 && page != 5) rumbleController.Stop("已离开震动测试页面，震动已停止");
             homePage.Visibility = page == 0 ? Visibility.Visible : Visibility.Collapsed;
             visualizerPage.Visibility = page == 1 ? Visibility.Visible : Visibility.Collapsed;
             inputTestPage.Visibility = page == 2 ? Visibility.Visible : Visibility.Collapsed;
             stickDriftTestPage.Visibility = page == 3 ? Visibility.Visible : Visibility.Collapsed;
             motionPage.Visibility = page == 4 ? Visibility.Visible : Visibility.Collapsed;
+            rumblePage.Visibility = page == 5 ? Visibility.Visible : Visibility.Collapsed;
             UpdatePageButton(homePageButton, page == 0);
             UpdatePageButton(visualizerPageButton, page == 1);
             UpdatePageButton(inputTestPageButton, page == 2);
             UpdatePageButton(stickDriftPageButton, page == 3);
             UpdatePageButton(motionPageButton, page == 4);
-            LabVisualStyles.FadeIn(page == 0 ? homePage : page == 1 ? visualizerPage : page == 2 ? inputTestPage : page == 3 ? stickDriftTestPage : motionPage, reducedMotion);
+            UpdatePageButton(rumblePageButton, page == 5);
+            UIElement visiblePage = page == 0 ? homePage : page == 1 ? visualizerPage : page == 2 ? inputTestPage : page == 3 ? stickDriftTestPage : page == 4 ? motionPage : rumblePage;
+            LabVisualStyles.FadeIn(visiblePage, reducedMotion);
             if (controllerNavigationEnabled) RebuildControllerNavigationTargets(true);
         }
 
@@ -1682,8 +2035,8 @@ namespace ControllerLab
 
             ushort pressed = (ushort)(buttons & ~controllerNavigationPreviousButtons);
             DateTime now = DateTime.UtcNow;
-            if ((pressed & 0x0100) != 0) ShowControllerPage(currentPage == 0 ? 4 : currentPage - 1);
-            if ((pressed & 0x0200) != 0) ShowControllerPage(currentPage == 4 ? 0 : currentPage + 1);
+            if ((pressed & 0x0100) != 0) ShowControllerPage(currentPage == 0 ? 5 : currentPage - 1);
+            if ((pressed & 0x0200) != 0) ShowControllerPage(currentPage == 5 ? 0 : currentPage + 1);
             if ((pressed & 0x1000) != 0) InvokeControllerFocusedAction();
             if ((pressed & 0x2000) != 0) ShowControllerPage(0);
 
@@ -1744,7 +2097,7 @@ namespace ControllerLab
         {
             get
             {
-                return currentPage == 0 ? homePage : currentPage == 1 ? visualizerPage : currentPage == 2 ? inputTestPage : currentPage == 3 ? stickDriftTestPage : motionPage;
+                return currentPage == 0 ? homePage : currentPage == 1 ? visualizerPage : currentPage == 2 ? inputTestPage : currentPage == 3 ? stickDriftTestPage : currentPage == 4 ? motionPage : rumblePage;
             }
         }
 
@@ -1767,6 +2120,7 @@ namespace ControllerLab
                 AddControllerNavigationTarget(inputTestPageButton);
                 AddControllerNavigationTarget(stickDriftPageButton);
                 AddControllerNavigationTarget(motionPageButton);
+                AddControllerNavigationTarget(rumblePageButton);
             }
             if (controllerNavigationTargets.Count == 0)
             {
@@ -2100,6 +2454,7 @@ namespace ControllerLab
 
         private void StartStickDriftTest()
         {
+            if (!CanStartStickTestAfterRumble()) return;
             if (currentControllerState == null || !currentControllerState.IsConnected || !currentControllerState.HasRealInput)
             {
                 if (stickTestStatusText != null) stickTestStatusText.Text = "正式检测需要真实 Xbox XInput 或 DualSense HID 输入";
@@ -2129,6 +2484,7 @@ namespace ControllerLab
 
         private void StartStickRangeTest()
         {
+            if (!CanStartStickTestAfterRumble()) return;
             if (currentControllerState == null || !currentControllerState.IsConnected || !currentControllerState.HasRealInput)
             {
                 if (footerStatus != null) footerStatus.Text = "范围测试需要真实 Xbox XInput 或 DualSense HID 输入。";
@@ -2139,6 +2495,28 @@ namespace ControllerLab
             stickTestLeftPlot.BeginTrace(StickPlotTraceMode.Range);
             stickTestRightPlot.BeginTrace(StickPlotTraceMode.Range);
             stickDriftTestEngine.StartRangeTest(currentControllerState);
+        }
+
+        private bool CanStartStickTestAfterRumble()
+        {
+            if (rumbleController.IsRunning)
+            {
+                if (stickTestStatusText != null) stickTestStatusText.Text = "震动正在运行，不能开始摇杆检测";
+                if (footerStatus != null) footerStatus.Text = "请先停止震动，并等待至少 1 秒后再开始漂移采样。";
+                return false;
+            }
+            DateTime stopped = rumbleController.LastStoppedUtc;
+            if (stopped != DateTime.MinValue)
+            {
+                double wait = 1.0 - (DateTime.UtcNow - stopped).TotalSeconds;
+                if (wait > 0)
+                {
+                    if (stickTestStatusText != null) stickTestStatusText.Text = "等待震动影响消退";
+                    if (footerStatus != null) footerStatus.Text = string.Format(CultureInfo.InvariantCulture, "震动刚刚停止，请等待 {0:0.0} 秒后再开始漂移采样。", wait);
+                    return false;
+                }
+            }
+            return true;
         }
 
         private void EndStickRangeTest()
@@ -2744,10 +3122,11 @@ namespace ControllerLab
             inputTestPageButton = MakeButton("按键检测", false);
             stickDriftPageButton = MakeButton("摇杆检测", false);
             motionPageButton = MakeButton("体感", false);
-            Button[] pages = { homePageButton, visualizerPageButton, inputTestPageButton, stickDriftPageButton, motionPageButton };
+            rumblePageButton = MakeButton("震动测试", false);
+            Button[] pages = { homePageButton, visualizerPageButton, inputTestPageButton, stickDriftPageButton, motionPageButton, rumblePageButton };
             for (int i = 0; i < pages.Length; i++)
             {
-                pages[i].Width = 92;
+                pages[i].Width = 84;
                 pages[i].Height = 34;
                 pages[i].FontSize = 12;
                 pages[i].Padding = new Thickness(8, 2, 8, 3);
@@ -2759,6 +3138,7 @@ namespace ControllerLab
             inputTestPageButton.Click += delegate { ShowPage(2); };
             stickDriftPageButton.Click += delegate { ShowPage(3); };
             motionPageButton.Click += delegate { ShowPage(4); };
+            rumblePageButton.Click += delegate { ShowPage(5); };
             Grid.SetColumn(navigation, 1);
             title.Children.Add(navigation);
             UpdatePageButton(homePageButton, true);
@@ -3135,6 +3515,7 @@ namespace ControllerLab
 
         private void SelectDevice(string deviceId)
         {
+            rumbleController.Stop("设备已切换，震动已停止");
             selectedDeviceId = deviceId;
             ClearTriggerHistory();
             diagnostics.Reset();
@@ -3160,6 +3541,7 @@ namespace ControllerLab
 
         private void SelectControllerFamily(ControllerFamily family)
         {
+            rumbleController.Stop("手柄类型已切换，震动已停止");
             selectedControllerFamily = family;
             ClearTriggerHistory();
             stickDriftTestEngine.Reset(null);
@@ -4221,6 +4603,7 @@ namespace ControllerLab
             deviceManager.Synchronize(latestControllerStates);
             ControllerState selected = ResolveActiveControllerState();
             currentControllerState = selected;
+            rumbleController.Synchronize(selected);
             InputSnapshot raw = selected.ToInputSnapshot();
             if (demoMode)
             {
@@ -4274,6 +4657,7 @@ namespace ControllerLab
             UpdateInputTestPage(selected);
             UpdateStickDriftTestPage(selected);
             UpdateMotionPage(selected);
+            UpdateRumblePage(selected);
             if (guidedOverlay != null && guidedOverlay.Visibility == Visibility.Visible)
             {
                 guidedTest.Update(state, demoMode ? 220.0 : actualSamplingHz);
@@ -5984,6 +6368,9 @@ namespace ControllerLab
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate uint GetCapabilitiesDelegate(uint index, uint flags, out XInputCapabilities capabilities);
 
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate uint SetStateDelegate(uint index, ref XInputVibration vibration);
+
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern IntPtr LoadLibrary(string fileName);
 
@@ -5997,6 +6384,7 @@ namespace ControllerLab
         private GetStateDelegate getState;
         private GetBatteryDelegate getBattery;
         private GetCapabilitiesDelegate getCapabilities;
+        private SetStateDelegate setState;
         private readonly BatteryReading[] cachedBattery =
         {
             new BatteryReading { Label = "—", ApproxPercent = -1 },
@@ -6042,6 +6430,8 @@ namespace ControllerLab
                     if (batteryPtr != IntPtr.Zero) getBattery = (GetBatteryDelegate)Marshal.GetDelegateForFunctionPointer(batteryPtr, typeof(GetBatteryDelegate));
                     IntPtr capabilitiesPtr = GetProcAddress(module, "XInputGetCapabilities");
                     if (capabilitiesPtr != IntPtr.Zero) getCapabilities = (GetCapabilitiesDelegate)Marshal.GetDelegateForFunctionPointer(capabilitiesPtr, typeof(GetCapabilitiesDelegate));
+                    IntPtr setStatePtr = GetProcAddress(module, "XInputSetState");
+                    if (setStatePtr != IntPtr.Zero) setState = (SetStateDelegate)Marshal.GetDelegateForFunctionPointer(setStatePtr, typeof(SetStateDelegate));
                     LibraryName = libraries[i].Replace(".dll", "");
                     break;
                 }
@@ -6049,6 +6439,65 @@ namespace ControllerLab
                 module = IntPtr.Zero;
             }
             if (getState == null) LibraryName = "XInput 不可用";
+        }
+
+        public bool CanSetVibration { get { return setState != null; } }
+
+        public bool TrySetVibration(int playerIndex, ushort leftMotorSpeed, ushort rightMotorSpeed, out string error)
+        {
+            error = null;
+            if (setState == null)
+            {
+                error = "当前 XInput 库未提供 XInputSetState";
+                return false;
+            }
+            if (playerIndex < 0 || playerIndex > 3)
+            {
+                error = "XInput 玩家槽位无效";
+                return false;
+            }
+            XInputVibration vibration = new XInputVibration
+            {
+                LeftMotorSpeed = leftMotorSpeed,
+                RightMotorSpeed = rightMotorSpeed
+            };
+            uint result = setState((uint)playerIndex, ref vibration);
+            if (result == 0) return true;
+            error = result == 1167
+                ? "设备已经断开"
+                : "XInputSetState 失败，错误码 " + result.ToString(CultureInfo.InvariantCulture);
+            return false;
+        }
+
+        public bool TryGetVibrationCapabilities(int playerIndex, out bool supportsLeft, out bool supportsRight, out string details)
+        {
+            supportsLeft = false;
+            supportsRight = false;
+            details = null;
+            if (playerIndex < 0 || playerIndex > 3)
+            {
+                details = "XInput 玩家槽位无效";
+                return false;
+            }
+            if (getCapabilities == null)
+            {
+                // Older XInput DLLs may expose SetState without capabilities.
+                supportsLeft = setState != null;
+                supportsRight = setState != null;
+                details = "XInput 未提供能力查询，按标准双电机兼容路径处理";
+                return setState != null;
+            }
+            XInputCapabilities capabilities;
+            uint result = getCapabilities((uint)playerIndex, 0, out capabilities);
+            if (result != 0)
+            {
+                details = result == 1167 ? "设备已经断开" : "XInputGetCapabilities 失败";
+                return false;
+            }
+            supportsLeft = capabilities.Vibration.LeftMotorSpeed != 0;
+            supportsRight = capabilities.Vibration.RightMotorSpeed != 0;
+            details = string.Format(CultureInfo.InvariantCulture, "左电机 {0}，右电机 {1}", supportsLeft ? "可用" : "不支持", supportsRight ? "可用" : "不支持");
+            return true;
         }
 
         public InputSnapshot Read(int preferredIndex)
@@ -6446,8 +6895,18 @@ namespace ControllerLab
 
         public void Dispose()
         {
+            if (setState != null)
+            {
+                for (uint index = 0; index < 4; index++)
+                {
+                    XInputVibration stop = new XInputVibration();
+                    try { setState(index, ref stop); }
+                    catch { }
+                }
+            }
             if (module != IntPtr.Zero) FreeLibrary(module);
             module = IntPtr.Zero;
+            setState = null;
         }
     }
 
@@ -6456,6 +6915,7 @@ namespace ControllerLab
         private sealed class SonyDeviceRecord
         {
             public InputSnapshot Latest;
+            public string RawPath;
             public DateTime LastPacketAt = DateTime.MinValue;
             public DateTime LastSeenAt = DateTime.MinValue;
             public bool Present;
@@ -6493,6 +6953,22 @@ namespace ControllerLab
         private DateTime motionRateWindowStarted = DateTime.UtcNow;
         private int motionReportsInWindow;
         private double motionUpdatesPerSecond;
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr CreateFile(
+            string fileName,
+            uint desiredAccess,
+            uint shareMode,
+            IntPtr securityAttributes,
+            uint creationDisposition,
+            uint flagsAndAttributes,
+            IntPtr templateFile);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool WriteFile(IntPtr handle, byte[] buffer, uint bytesToWrite, out uint bytesWritten, IntPtr overlapped);
+
+        [DllImport("kernel32.dll")]
+        private static extern bool CloseHandle(IntPtr handle);
 
         // Debug output is deliberately opt-in: a connected controller can report at several hundred Hz.
         public bool EnableRawTouchLogging { get; set; }
@@ -6544,6 +7020,7 @@ namespace ControllerLab
                         bool edge = item.Value.IndexOf("PID_0DF2", StringComparison.OrdinalIgnoreCase) >= 0;
                         record = new SonyDeviceRecord
                         {
+                            RawPath = item.Value,
                             Latest = new InputSnapshot
                             {
                                 DeviceId = "sony:" + item.Key,
@@ -6560,6 +7037,7 @@ namespace ControllerLab
                         };
                         devices[item.Key] = record;
                     }
+                    record.RawPath = item.Value;
                     record.Present = true;
                     record.LastSeenAt = now;
                 }
@@ -6600,6 +7078,7 @@ namespace ControllerLab
                     record = new SonyDeviceRecord();
                     devices[deviceIdentity] = record;
                 }
+                record.RawPath = rawPath;
                 record.Latest = parsed;
                 record.LastPacketAt = now;
                 record.LastSeenAt = now;
@@ -6636,6 +7115,87 @@ namespace ControllerLab
                 }
             }
             return result;
+        }
+
+        public bool TryWriteOutputReport(string controllerDeviceId, byte[] report, out string error)
+        {
+            error = null;
+            if (string.IsNullOrEmpty(controllerDeviceId) || report == null || report.Length == 0)
+            {
+                error = "DualSense 输出参数无效";
+                return false;
+            }
+
+            string rawPath = null;
+            InputSnapshot snapshot = null;
+            lock (sync)
+            {
+                foreach (SonyDeviceRecord record in devices.Values)
+                {
+                    if (record.Latest == null || !string.Equals(record.Latest.DeviceId, controllerDeviceId, StringComparison.OrdinalIgnoreCase)) continue;
+                    rawPath = record.RawPath;
+                    snapshot = record.Latest;
+                    break;
+                }
+            }
+            if (string.IsNullOrEmpty(rawPath) || snapshot == null || !snapshot.Connected)
+            {
+                error = "DualSense 设备已经断开或输出路径不可用";
+                return false;
+            }
+            if (rawPath.IndexOf("PID_0CE6", StringComparison.OrdinalIgnoreCase) < 0
+                && rawPath.IndexOf("PID_0DF2", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                error = "当前 Sony 设备不是已识别的 DualSense 输出目标";
+                return false;
+            }
+
+            bool bluetooth = snapshot.ConnectionMethod != null
+                && snapshot.ConnectionMethod.IndexOf("蓝牙", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (bluetooth && (report.Length != DualSenseOutputReportBuilder.BluetoothReportLength || report[0] != 0x31))
+            {
+                error = "拒绝向蓝牙 DualSense 发送 USB 输出报告";
+                return false;
+            }
+            if (!bluetooth && (report.Length != DualSenseOutputReportBuilder.UsbReportLength || report[0] != 0x02))
+            {
+                error = "拒绝向 USB DualSense 发送蓝牙输出报告";
+                return false;
+            }
+            if (bluetooth && !DualSenseOutputReportBuilder.HasValidBluetoothCrc(report))
+            {
+                error = "DualSense 蓝牙输出 CRC 校验失败";
+                return false;
+            }
+
+            const uint GenericWrite = 0x40000000;
+            const uint ShareReadWrite = 0x00000003;
+            const uint OpenExisting = 3;
+            IntPtr handle = CreateFile(rawPath, GenericWrite, ShareReadWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (handle == new IntPtr(-1))
+            {
+                error = "无法打开 DualSense HID 输出路径，Windows 错误 " + Marshal.GetLastWin32Error().ToString(CultureInfo.InvariantCulture);
+                return false;
+            }
+            try
+            {
+                uint written;
+                if (!WriteFile(handle, report, (uint)report.Length, out written, IntPtr.Zero))
+                {
+                    error = "DualSense HID 写入失败，Windows 错误 " + Marshal.GetLastWin32Error().ToString(CultureInfo.InvariantCulture);
+                    return false;
+                }
+                if (written != report.Length)
+                {
+                    error = string.Format(CultureInfo.InvariantCulture, "DualSense HID 写入长度不完整：{0}/{1}", written, report.Length);
+                    return false;
+                }
+                return true;
+            }
+            finally
+            {
+                CloseHandle(handle);
+            }
         }
 
         public void Dispose()

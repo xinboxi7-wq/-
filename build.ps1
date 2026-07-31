@@ -33,6 +33,7 @@ $compilerArgs = @(
     "/reference:$(Join-Path $framework 'System.Core.dll')"
     "/reference:$(Join-Path $framework 'System.Runtime.Serialization.dll')"
     (Join-Path $project 'ControllerCore.cs')
+    (Join-Path $project 'ControllerRumble.cs')
     (Join-Path $project 'DualSenseMotion.cs')
     (Join-Path $project 'DualSenseMotionVisual.cs')
     (Join-Path $project 'XboxOverlay.cs')

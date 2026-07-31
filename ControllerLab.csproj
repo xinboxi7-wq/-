@@ -41,6 +41,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ControllerCore.cs" />
+    <Compile Include="ControllerRumble.cs" />
     <Compile Include="DualSenseMotion.cs" />
     <Compile Include="DualSenseMotionVisual.cs" />
     <Compile Include="XboxOverlay.cs" />
@@ -83,6 +84,7 @@
     <None Include="app.manifest" />
     <None Include="build.ps1" />
     <None Include="README.md" />
+    <None Include="RUMBLE_TEST_NOTES.md" />
     <Content Include="Tools\GenerateDualSenseRegions\generate_dualsense_regions.py" />
     <Content Include="Tools\GenerateDualSenseRegions\README.md" />
     <Content Include="Tools\GenerateXboxTopRegions\generate_xbox_top_regions.py" />
