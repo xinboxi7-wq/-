@@ -45,6 +45,9 @@
     <Compile Include="JoystickAnalyzer.cs" />
     <Compile Include="JoystickTestViewModel.cs" />
     <Compile Include="JoystickTestPage.cs" />
+    <Compile Include="ControllerHealthReport.cs" />
+    <Compile Include="ControllerHealthCheckViewModel.cs" />
+    <Compile Include="ControllerHealthCheckPage.cs" />
     <Compile Include="DualSenseMotion.cs" />
     <Compile Include="DualSenseMotionVisual.cs" />
     <Compile Include="XboxOverlay.cs" />

@@ -8,6 +8,14 @@
 
 该命令固定验证 10 类构造数据：低漂移中心、右漂、噪声标准差、完整圆、缺失象限、方形限制、回中过冲、多次反弹、死区不得低于最大漂移，以及空样本安全返回。
 
+新增完整健康检测自检：
+
+```powershell
+.\ControllerLab_Test.exe --health-check-selftest
+```
+
+该命令验证扳机行程分析、Xbox 动态步骤不包含 DualSense 专属项目、跳过项不计分且报告为 Incomplete、严重异常评分上限、断开 / 原设备重连、JSON / Markdown 保存读取导出删除。
+
 ## 构建环境
 
 - **目标框架：** .NET Framework 4.8。
@@ -33,6 +41,8 @@
 .\ControllerLab_Test.exe --controller-core-selftest
 .\ControllerLab_Test.exe --device-manager-selftest
 .\ControllerLab_Test.exe --stick-drift-selftest
+.\ControllerLab_Test.exe --joystick-analyzer-selftest
+.\ControllerLab_Test.exe --health-check-selftest
 .\ControllerLab_Test.exe --trigger-chart-selftest
 
 # DualSense 与可视化
@@ -56,6 +66,8 @@
 | `--controller-navigation-selftest` | 手柄导航逻辑 | 真实按键硬件 |
 | `--controller-core-selftest` | 状态适配与报告模型 | 真实 HID / XInput |
 | `--stick-drift-selftest` | 构造漂移、范围、阈值、连续检测和临时目录中的实测记录 JSON/TXT 写入 | 真实摇杆噪声、驱动归一化差异 |
+| `--joystick-analyzer-selftest` | 专业摇杆静止、圆周、回中和死区推荐算法 | 真实摇杆机械特性 |
+| `--health-check-selftest` | 动态步骤、跳过 / 不支持语义、评分上限、断连恢复、报告存储与导出 | 用户主观震感、真实触点 / 体感和实际硬件行程 |
 | `--device-manager-selftest` | 多设备注册 / 移除逻辑 | Windows 热插拔 |
 | `--ds5-touch-parser-selftest` | USB / BT 报告布局构造数据 | 真实 DualSense 报告 |
 | `--ds5-motion-selftest` | 运动解析、CRC、融合边界 | 真实传感器精度 |
@@ -71,6 +83,7 @@
 4. LT / RT 从 0% 缓慢到 100%，确认历史曲线连续且 LT 左→右、RT 右→左的视觉反馈正确。
 5. 完成按键测试和摇杆静止 / 范围测试；测试中故意触碰摇杆，确认结果被标记为无效而非严重漂移。完成后点击“保存实测记录”，确认 `%LocalAppData%\ControllerLab\stick-test-records\` 中生成同一记录 ID 的 `.json` 和 UTF-8 `.txt`，并在测试记录中注明文件名。
 6. 震动测试先使用默认 40% / 5 秒：验证左低频、右高频、均衡、渐强、脉冲和交替；设备断开、切换页面和退出应用时必须停止。
+7. 进入“完整检测”，从开始页走到报告页；验证上一步、下一步、重测、跳过、取消，跳过项显示未检测，历史报告可重新读取并正确导出 JSON / Markdown。
 
 ## DualSense USB 实机回归
 
@@ -79,6 +92,7 @@
 3. 在触摸板测试单指四角、滑动、双指、按压组合；确认只有报告提供真实坐标时才显示触点。
 4. 在体感页静止校准、重新居中、轻微旋转；确认异常 CRC / 数据中断不会产生虚假姿态。
 5. 使用默认安全震动设置，确认 USB 输出只使用 USB 报告，并验证页面离开 / 断开 / 退出停止。
+6. 运行完整检测，确认只有报告中真实可用的触摸坐标和 Motion 数据才生成对应步骤；缺少解析数据时必须显示当前版本暂不支持检测。
 
 ## DualSense 蓝牙实机回归
 
@@ -106,6 +120,7 @@
 | Motion | 运动自检、运行时 | 静止校准、断连、CRC / 可用性提示 |
 | 漂移 / 范围 | 漂移自检、扳机曲线 | 静止、触碰无效、范围一圈、设备切换、JSON/TXT 实测记录内容 |
 | 震动 | 震动自检、运行时 | 两通道、预设、停止、断开、退出 |
+| 完整检测 / 报告 | 健康检测自检、摇杆分析、核心、震动、运行时 | 全向导、跳过、不支持、设备断连重连、历史与导出 |
 | UI / 导航 | 启动、运行时、导航 | 页面切换 10 次、窗口 / DPI、资源趋势 |
 
 每次实机验证应记录设备型号、连接模式、测试日期、输入来源、结果和已知异常；没有记录时，不得更新为 `Supported and verified`。

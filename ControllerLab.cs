@@ -226,6 +226,11 @@ namespace ControllerLab
                 Console.WriteLine(JoystickAnalyzerSelfTest.Run());
                 return;
             }
+            if (HasArgument("--health-check-selftest"))
+            {
+                Console.WriteLine(ControllerHealthCheckSelfTest.Run());
+                return;
+            }
             if (HasArgument("--device-manager-selftest"))
             {
                 Console.WriteLine(ControllerCoreSelfTest.RunDeviceManagerSelfTest());
@@ -612,6 +617,7 @@ namespace ControllerLab
         private UIElement stickDriftTestPage;
         private UIElement motionPage;
         private UIElement rumblePage;
+        private UIElement healthCheckPage;
         private int currentPage = 1;
         private bool controllerNavigationEnabled;
         private bool controllerNavigationComboLatched;
@@ -633,6 +639,7 @@ namespace ControllerLab
         private Button stickDriftPageButton;
         private Button motionPageButton;
         private Button rumblePageButton;
+        private Button healthCheckPageButton;
         private Button inputTestPageButton;
         private WrapPanel inputTestChipPanel;
         private TextBlock inputTestProgressText;
@@ -747,6 +754,9 @@ namespace ControllerLab
         private readonly ControllerRumbleController rumbleController;
         private readonly JoystickTestViewModel joystickTestViewModel;
         private JoystickTestPage joystickTestPage;
+        private readonly ControllerHealthReportStore healthReportStore;
+        private readonly ControllerHealthCheckViewModel healthCheckViewModel;
+        private ControllerHealthCheckPage healthCheckView;
 
         [DllImport("winmm.dll")]
         private static extern uint timeBeginPeriod(uint period);
@@ -778,6 +788,8 @@ namespace ControllerLab
             sonyInput = new SonyInputManager();
             rumbleController = new ControllerRumbleController(input, sonyInput);
             joystickTestViewModel = new JoystickTestViewModel();
+            healthReportStore = new ControllerHealthReportStore();
+            healthCheckViewModel = new ControllerHealthCheckViewModel(rumbleController, healthReportStore);
             deviceManager = new ControllerDeviceManager(input, sonyInput);
             motionManager = new DualSenseMotionManager();
             Title = "手柄实验室";
@@ -871,12 +883,14 @@ namespace ControllerLab
                 if (HasArgument("--xbox-calibrate")) Dispatcher.BeginInvoke(new Action(OpenXboxCalibration), DispatcherPriority.Background);
                 if (HasArgument("--visualizer")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(1); }), DispatcherPriority.Background);
                 if (HasArgument("--rumble-page")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(5); }), DispatcherPriority.Background);
+                if (HasArgument("--health-check-page")) Dispatcher.BeginInvoke(new Action(delegate { ShowPage(6); }), DispatcherPriority.Background);
             };
             Closed += delegate
             {
                 StopRenderLoop();
                 StopSampling();
                 if (joystickTestPage != null) joystickTestPage.Cancel("应用退出，摇杆检测已取消");
+                if (healthCheckView != null) healthCheckView.Dispose();
                 rumbleController.Dispose();
                 stickDriftTestEngine.Dispose();
                 if (joystickTestPage != null) joystickTestPage.Dispose();
@@ -1091,6 +1105,9 @@ namespace ControllerLab
             motionPage.Visibility = Visibility.Collapsed;
             rumblePage = BuildRumbleTestPage();
             rumblePage.Visibility = Visibility.Collapsed;
+            healthCheckView = new ControllerHealthCheckPage(healthCheckViewModel, healthReportStore);
+            healthCheckPage = healthCheckView;
+            healthCheckPage.Visibility = Visibility.Collapsed;
             pageHost = new Grid();
             pageHost.Children.Add(homePage);
             pageHost.Children.Add(visualizerPage);
@@ -1098,6 +1115,7 @@ namespace ControllerLab
             pageHost.Children.Add(stickDriftTestPage);
             pageHost.Children.Add(motionPage);
             pageHost.Children.Add(rumblePage);
+            pageHost.Children.Add(healthCheckPage);
             Grid.SetRow(pageHost, 1);
             root.Children.Add(pageHost);
             shellContent = pageHost;
@@ -1767,7 +1785,7 @@ namespace ControllerLab
 
         private void StartRumblePattern(ControllerRumblePattern pattern)
         {
-            if (stickDriftTestEngine.IsActive || joystickTestViewModel.IsTestActive)
+            if (stickDriftTestEngine.IsActive || joystickTestViewModel.IsTestActive || healthCheckViewModel.IsRunning)
             {
                 if (rumbleStatusText != null)
                 {
@@ -1842,7 +1860,7 @@ namespace ControllerLab
             }
             if (rumbleLeftVisual != null) rumbleLeftVisual.Opacity = 0.14 + snapshot.LeftStrength * 0.86;
             if (rumbleRightVisual != null) rumbleRightVisual.Opacity = 0.14 + snapshot.RightStrength * 0.86;
-            bool driftActive = stickDriftTestEngine.IsActive || joystickTestViewModel.IsTestActive;
+            bool driftActive = stickDriftTestEngine.IsActive || joystickTestViewModel.IsTestActive || healthCheckViewModel.IsRunning;
             bool enabled = snapshot.IsSupported && controller != null && controller.IsConnected && controller.HasRealInput && !driftActive;
             if (rumbleStartButton != null) rumbleStartButton.IsEnabled = enabled && !snapshot.IsRunning;
             if (rumbleStopButton != null) rumbleStopButton.IsEnabled = snapshot.IsRunning;
@@ -1980,9 +1998,9 @@ namespace ControllerLab
 
         private void ShowPage(int page)
         {
-            if (homePage == null || visualizerPage == null || inputTestPage == null || stickDriftTestPage == null || motionPage == null || rumblePage == null) return;
+            if (homePage == null || visualizerPage == null || inputTestPage == null || stickDriftTestPage == null || motionPage == null || rumblePage == null || healthCheckPage == null) return;
             int previousPage = currentPage;
-            currentPage = Math.Max(0, Math.Min(5, page));
+            currentPage = Math.Max(0, Math.Min(6, page));
             page = currentPage;
             if (page != 3)
             {
@@ -1991,19 +2009,22 @@ namespace ControllerLab
                 ClearStickTestVisualState();
             }
             if (previousPage == 5 && page != 5) rumbleController.Stop("已离开震动测试页面，震动已停止");
+            if (previousPage == 6 && page != 6 && healthCheckView != null) healthCheckView.CancelForPageLeave();
             homePage.Visibility = page == 0 ? Visibility.Visible : Visibility.Collapsed;
             visualizerPage.Visibility = page == 1 ? Visibility.Visible : Visibility.Collapsed;
             inputTestPage.Visibility = page == 2 ? Visibility.Visible : Visibility.Collapsed;
             stickDriftTestPage.Visibility = page == 3 ? Visibility.Visible : Visibility.Collapsed;
             motionPage.Visibility = page == 4 ? Visibility.Visible : Visibility.Collapsed;
             rumblePage.Visibility = page == 5 ? Visibility.Visible : Visibility.Collapsed;
+            healthCheckPage.Visibility = page == 6 ? Visibility.Visible : Visibility.Collapsed;
             UpdatePageButton(homePageButton, page == 0);
             UpdatePageButton(visualizerPageButton, page == 1);
             UpdatePageButton(inputTestPageButton, page == 2);
             UpdatePageButton(stickDriftPageButton, page == 3);
             UpdatePageButton(motionPageButton, page == 4);
             UpdatePageButton(rumblePageButton, page == 5);
-            UIElement visiblePage = page == 0 ? homePage : page == 1 ? visualizerPage : page == 2 ? inputTestPage : page == 3 ? stickDriftTestPage : page == 4 ? motionPage : rumblePage;
+            UpdatePageButton(healthCheckPageButton, page == 6);
+            UIElement visiblePage = page == 0 ? homePage : page == 1 ? visualizerPage : page == 2 ? inputTestPage : page == 3 ? stickDriftTestPage : page == 4 ? motionPage : page == 5 ? rumblePage : healthCheckPage;
             LabVisualStyles.FadeIn(visiblePage, reducedMotion);
             if (controllerNavigationEnabled)
             {
@@ -2055,8 +2076,8 @@ namespace ControllerLab
 
             ushort pressed = (ushort)(buttons & ~controllerNavigationPreviousButtons);
             DateTime now = DateTime.UtcNow;
-            if ((pressed & 0x0100) != 0) ShowControllerPage(currentPage == 0 ? 5 : currentPage - 1);
-            if ((pressed & 0x0200) != 0) ShowControllerPage(currentPage == 5 ? 0 : currentPage + 1);
+            if ((pressed & 0x0100) != 0) ShowControllerPage(currentPage == 0 ? 6 : currentPage - 1);
+            if ((pressed & 0x0200) != 0) ShowControllerPage(currentPage == 6 ? 0 : currentPage + 1);
             if ((pressed & 0x1000) != 0) InvokeControllerFocusedAction();
             if ((pressed & 0x2000) != 0) ShowControllerPage(0);
 
@@ -2117,7 +2138,7 @@ namespace ControllerLab
         {
             get
             {
-                return currentPage == 0 ? homePage : currentPage == 1 ? visualizerPage : currentPage == 2 ? inputTestPage : currentPage == 3 ? stickDriftTestPage : currentPage == 4 ? motionPage : rumblePage;
+                return currentPage == 0 ? homePage : currentPage == 1 ? visualizerPage : currentPage == 2 ? inputTestPage : currentPage == 3 ? stickDriftTestPage : currentPage == 4 ? motionPage : currentPage == 5 ? rumblePage : healthCheckPage;
             }
         }
 
@@ -2145,6 +2166,7 @@ namespace ControllerLab
                 AddControllerNavigationTarget(stickDriftPageButton);
                 AddControllerNavigationTarget(motionPageButton);
                 AddControllerNavigationTarget(rumblePageButton);
+                AddControllerNavigationTarget(healthCheckPageButton);
             }
             if (controllerNavigationTargets.Count == 0)
             {
@@ -3169,7 +3191,8 @@ namespace ControllerLab
             stickDriftPageButton = MakeButton("摇杆检测", false);
             motionPageButton = MakeButton("体感", false);
             rumblePageButton = MakeButton("震动测试", false);
-            Button[] pages = { homePageButton, visualizerPageButton, inputTestPageButton, stickDriftPageButton, motionPageButton, rumblePageButton };
+            healthCheckPageButton = MakeButton("完整检测", false);
+            Button[] pages = { homePageButton, visualizerPageButton, inputTestPageButton, stickDriftPageButton, motionPageButton, rumblePageButton, healthCheckPageButton };
             for (int i = 0; i < pages.Length; i++)
             {
                 pages[i].Width = 84;
@@ -3185,6 +3208,7 @@ namespace ControllerLab
             stickDriftPageButton.Click += delegate { ShowPage(3); };
             motionPageButton.Click += delegate { ShowPage(4); };
             rumblePageButton.Click += delegate { ShowPage(5); };
+            healthCheckPageButton.Click += delegate { ShowPage(6); };
             Grid.SetColumn(navigation, 1);
             title.Children.Add(navigation);
             UpdatePageButton(homePageButton, true);
@@ -3561,6 +3585,7 @@ namespace ControllerLab
 
         private void SelectDevice(string deviceId)
         {
+            if (healthCheckView != null) healthCheckView.ResetForDeviceChange();
             rumbleController.Stop("设备已切换，震动已停止");
             selectedDeviceId = deviceId;
             ClearTriggerHistory();
@@ -3588,6 +3613,7 @@ namespace ControllerLab
 
         private void SelectControllerFamily(ControllerFamily family)
         {
+            if (healthCheckView != null) healthCheckView.ResetForDeviceChange();
             rumbleController.Stop("手柄类型已切换，震动已停止");
             selectedControllerFamily = family;
             ClearTriggerHistory();
@@ -3658,6 +3684,7 @@ namespace ControllerLab
         private void SetDemoMode(bool enabled)
         {
             if (demoMode == enabled) return;
+            if (healthCheckView != null) healthCheckView.ResetForDeviceChange();
             if (enabled)
             {
                 SaveSettings();
@@ -4708,6 +4735,8 @@ namespace ControllerLab
                 joystickTestPage.Update(selected, demoMode ? 220.0 : actualSamplingHz, rumbleController.IsRunning, rumbleController.LastStoppedUtc);
             UpdateMotionPage(selected);
             UpdateRumblePage(selected);
+            if (healthCheckView != null && (currentPage == 6 || healthCheckViewModel.IsRunning))
+                healthCheckView.Update(selected);
             if (guidedOverlay != null && guidedOverlay.Visibility == Visibility.Visible)
             {
                 guidedTest.Update(state, demoMode ? 220.0 : actualSamplingHz);

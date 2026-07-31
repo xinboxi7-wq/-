@@ -12,6 +12,8 @@ ControllerLab 是一个 Windows 原生 WPF 手柄检测与实时可视化工具�
 - 按键测试、摇杆静止漂移 / 范围检测、建议死区和最近 5 秒 LT / RT 历史曲线。
 - DualSense 完整 HID 报告可解析触摸板按压、最多两点触点以及运动数据；没有真实字段时明确显示不可用。
 - Xbox 左右电机和 DualSense 基础双通道震动测试，带持续时间、单任务和自动停止保护。
+- “完整检测”向导按设备能力串联按键、十字键、摇杆、扳机、震动及可用的 DualSense 触摸板 / 陀螺仪检测，并生成健康评分。
+- 健康报告保存为本地 JSON 与 Markdown，支持历史查看、删除、重新检测及 JSON / Markdown 导出。
 - 手柄导航：B 返回设备首页，LB / RB 切换页面，View + Menu 进入可用操作。
 
 动态演示和构造自检仅用于 UI / 逻辑验证，不会伪装为真实输入或写入正式检测结果。
@@ -76,6 +78,7 @@ ControllerLab 是一个 Windows 原生 WPF 手柄检测与实时可视化工具�
 5. 在**体感**页仅使用应用确认可用的真实 DualSense 运动数据。
 6. 在**震动测试**中从默认 `40% / 5 秒` 开始。震动运行期间不能进行静止漂移检测；停止后至少等待 1 秒再采样。
 7. 如需像素级微调 Overlay，使用应用内校准入口。用户 override 写入 LocalAppData，默认资源不会被覆盖。
+8. 在顶部进入**完整检测**可运行分步健康向导；跳过项显示“未检测”且不参与评分，不支持项不会出现在设备的检测步骤中。
 
 ## 项目结构
 
@@ -87,6 +90,8 @@ ControllerLab/
 ├─ ControllerLab.cs        # App、MainWindow、Raw Input、Sony HID、可视化组件
 ├─ ControllerCore.cs       # 统一状态、设备管理、按键 / 摇杆检测
 ├─ ControllerRumble.cs     # 统一震动服务、输出报告与安全控制
+├─ ControllerHealth*.cs    # 完整检测向导、评分、报告存储和原生 WPF 页面
+├─ Joystick*.cs            # 专业摇杆采样、分析、视图模型与单项页面
 ├─ DualSenseMotion*.cs     # 运动解析、融合与可视化
 ├─ XboxOverlay.cs          # Xbox Overlay、配置和校准
 ├─ ControllerLabTheme.cs   # 代码式 WPF 主题
@@ -114,7 +119,7 @@ ControllerLab/
 
 ## 路线图
 
-近期方向包括摇杆检测实机可信度、一键健康报告、震动实机验证、DualSense 高级检测和产品化收尾。详细完成标准和风险见 [docs/ROADMAP.md](docs/ROADMAP.md)。
+近期方向包括完整检测实机可信度、震动实机验证、DualSense 高级检测和产品化收尾。详细完成标准和风险见 [docs/ROADMAP.md](docs/ROADMAP.md)。
 
 ## 许可证
 
