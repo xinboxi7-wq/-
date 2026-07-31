@@ -16,6 +16,8 @@ ControllerLab.sln
 ├─ RumbleStudioPage.cs                  # 原生 WPF 专业震动页与曲线编辑器
 ├─ DualSenseMotion.cs                   # MotionSample、静止校准、姿态融合
 ├─ DualSenseMotionVisual.cs             # DualSense 体感姿态可视化
+├─ DualSenseAdvanced.cs                 # 触摸轨迹/覆盖、六轴诊断、能力和设备校准
+├─ DualSenseAdvancedPage.cs             # 四分区原生 WPF 高级页和有界轨迹渲染
 ├─ XboxOverlay.cs                       # Xbox 区域配置、渲染和校准窗口
 ├─ ControllerLabTheme.cs                # 代码式 WPF 主题与通用样式
 ├─ Assets/                              # 图片、Alpha Mask、区域及视觉样式配置
@@ -33,7 +35,7 @@ ControllerLab.sln
 | 实时可视化 | 页面 1 | `ControllerVisualizerView`、`ControllerVisual`、`DualSenseVisual` |
 | 按键检测 | 页面 2 | `InputTestSession`、`ControllerTestReport` |
 | 摇杆检测 | 页面 3 | `StickDriftTestEngine`、`StickDriftAnalyzer`、范围跟踪器、`StickTestEvidenceStore` |
-| 体感 | 页面 4 | `DualSenseMotionManager`、`MotionFusionService`、`DualSenseMotionPoseView` |
+| DS 高级 | 页面 4 | `DualSenseAdvancedPage`、`DualSenseTouchpadAnalyzer`、`DualSenseMotionManager`、`DualSenseGyroscopeAnalyzer` |
 | 震动测试 | 页面 5 | `ControllerRumbleController`、`IControllerRumbleService` |
 
 UI 页面不应直接读取 XInput、Raw Input 或 HID 字节。所有运行时输入先转换为 `ControllerState`，再在 WPF 渲染循环中显示。
@@ -75,6 +77,8 @@ DualSense
 - 蓝牙紧凑兼容输入：报告 `0x01`，仅基础按键 / 摇杆 / 扳机；不宣称触摸坐标或运动数据可用。
 
 触点、运动和电量必须仅在当前实际报告提供相应数据时显示。`DualSenseMotion.cs` 将已验证的输入样本交给 `MotionFusionService`，内部用四元数跟踪姿态，并通过加速度计修正 Pitch / Roll 长期漂移。
+
+`DualSenseAdvancedManager` 与 `DualSenseMotionManager` 都从后台采样线程消费统一 `ControllerState`，UI 只以 30 Hz 读取快照。触摸轨迹有 1600 点上限，覆盖率使用固定 24×12 网格；六轴诊断和姿态算法均不进入 UI 事件代码。设备校准保存到 `%LocalAppData%\ControllerLab\DualSense\Devices\` 的哈希设备文件。详情见 [`DUALSENSE_ADVANCED_NOTES.md`](../DUALSENSE_ADVANCED_NOTES.md)。
 
 ## Overlay 渲染流
 
@@ -123,6 +127,7 @@ Assets/dualsense.png + Assets/dualSenseRegions.json + Assets/dualSenseVisualStyl
 | 崩溃日志 | `%LocalAppData%\ControllerLab\logs\crash.log` | `App.RecordUnhandledException` 写入 |
 | 摇杆实测记录 | `%LocalAppData%\ControllerLab\stick-test-records\` | 用户在摇杆页保存的 JSON 结构记录和 UTF-8 中文 TXT 报告；仅接受完成的真实 XInput / DualSense HID 检测结果，同一 `EvidenceId` 的范围补充会更新同一对文件 |
 | 震动设备配置 | `%LocalAppData%\ControllerLab\rumble\` | 哈希设备配置、感知校准和自定义时间线 JSON |
+| DualSense 设备校准 | `%LocalAppData%\ControllerLab\DualSense\Devices\` | 三轴 Bias / Noise、姿态灵敏度和平滑度；文件名使用设备 ID 哈希 |
 | 构建 | `build.ps1` | 调用本机 .NET Framework 4.8 x64 WPF 编译器 |
 | 可执行自检 | `ControllerLab.cs` 的命令行开关 | 启动、运行时、导航、核心、漂移、设备、触摸、运动、Overlay、扳机曲线和震动 |
 

@@ -152,6 +152,11 @@ namespace ControllerLab
                 Console.WriteLine(DualSenseMotionSelfTest.Run());
                 return;
             }
+            if (HasArgument("--dualsense-advanced-selftest"))
+            {
+                Console.WriteLine(DualSenseAdvancedSelfTest.Run());
+                return;
+            }
             if (HasArgument("--ds5-overlay-selftest"))
             {
                 Console.WriteLine(DualSenseRegionManager.RunOverlayGeometrySelfTest());
@@ -525,6 +530,7 @@ namespace ControllerLab
         private readonly SonyInputManager sonyInput;
         private readonly ControllerDeviceManager deviceManager;
         private readonly DualSenseMotionManager motionManager;
+        private readonly DualSenseAdvancedManager dualSenseAdvancedManager;
         private readonly ControllerInputTestEngine inputTestEngine = new ControllerInputTestEngine();
         private readonly StickTriggerTestEngine stickTriggerTestEngine = new StickTriggerTestEngine();
         private readonly StickDriftTestEngine stickDriftTestEngine = new StickDriftTestEngine();
@@ -754,6 +760,7 @@ namespace ControllerLab
         private readonly ControllerRumbleController rumbleController;
         private readonly RumbleSettingsStore rumbleSettingsStore;
         private RumbleStudioPage rumbleStudioPage;
+        private DualSenseAdvancedPage dualSenseAdvancedPage;
         private readonly JoystickTestViewModel joystickTestViewModel;
         private JoystickTestPage joystickTestPage;
         private readonly ControllerHealthReportStore healthReportStore;
@@ -795,6 +802,7 @@ namespace ControllerLab
             healthCheckViewModel = new ControllerHealthCheckViewModel(rumbleController, healthReportStore);
             deviceManager = new ControllerDeviceManager(input, sonyInput);
             motionManager = new DualSenseMotionManager();
+            dualSenseAdvancedManager = new DualSenseAdvancedManager();
             Title = "手柄实验室";
             MinWidth = 1120;
             MinHeight = 760;
@@ -894,6 +902,7 @@ namespace ControllerLab
                 StopSampling();
                 if (joystickTestPage != null) joystickTestPage.Cancel("应用退出，摇杆检测已取消");
                 if (healthCheckView != null) healthCheckView.Dispose();
+                if (dualSenseAdvancedPage != null) dualSenseAdvancedPage.Dispose();
                 if (rumbleStudioPage != null) rumbleStudioPage.Dispose();
                 rumbleController.Dispose();
                 stickDriftTestEngine.Dispose();
@@ -1105,7 +1114,8 @@ namespace ControllerLab
             stickTestThreeRunsCheck = joystickTestPage.NavigationCheckBox;
             stickDriftTestPage = joystickTestPage;
             stickDriftTestPage.Visibility = Visibility.Collapsed;
-            motionPage = BuildMotionPage();
+            dualSenseAdvancedPage = new DualSenseAdvancedPage(motionManager, dualSenseAdvancedManager, StartMotionCalibration, RecenterMotion, ResetMotion);
+            motionPage = dualSenseAdvancedPage;
             motionPage.Visibility = Visibility.Collapsed;
             rumbleStudioPage = new RumbleStudioPage(rumbleController, rumbleSettingsStore);
             rumblePage = rumbleStudioPage;
@@ -1941,7 +1951,12 @@ namespace ControllerLab
             if (motionPage == null || motionPage.Visibility != Visibility.Visible) return;
             DateTime now = DateTime.UtcNow;
             if (now < nextMotionUiRefresh) return;
-            nextMotionUiRefresh = now.AddMilliseconds(16.7);
+            nextMotionUiRefresh = now.AddMilliseconds(33.3);
+            if (dualSenseAdvancedPage != null)
+            {
+                dualSenseAdvancedPage.Update(controller);
+                return;
+            }
             bool nativeDualSense = controller != null && controller.IsConnected && controller.ControllerType == ControllerType.DualSense && controller.InputSource == ControllerInputSource.DualSenseHid;
             MotionViewState view = nativeDualSense ? motionManager.Get(controller.DeviceId) : new MotionViewState
             {
@@ -2049,6 +2064,7 @@ namespace ControllerLab
                 else rumbleController.Stop("已离开震动测试页面，震动已停止");
             }
             if (previousPage == 6 && page != 6 && healthCheckView != null) healthCheckView.CancelForPageLeave();
+            if (previousPage == 4 && page != 4 && dualSenseAdvancedPage != null) dualSenseAdvancedPage.CancelForPageLeave();
             homePage.Visibility = page == 0 ? Visibility.Visible : Visibility.Collapsed;
             visualizerPage.Visibility = page == 1 ? Visibility.Visible : Visibility.Collapsed;
             inputTestPage.Visibility = page == 2 ? Visibility.Visible : Visibility.Collapsed;
@@ -3228,7 +3244,7 @@ namespace ControllerLab
             visualizerPageButton = MakeButton("实时可视化", false);
             inputTestPageButton = MakeButton("按键检测", false);
             stickDriftPageButton = MakeButton("摇杆检测", false);
-            motionPageButton = MakeButton("体感", false);
+            motionPageButton = MakeButton("DS 高级", false);
             rumblePageButton = MakeButton("震动测试", false);
             healthCheckPageButton = MakeButton("完整检测", false);
             Button[] pages = { homePageButton, visualizerPageButton, inputTestPageButton, stickDriftPageButton, motionPageButton, rumblePageButton, healthCheckPageButton };
@@ -4714,6 +4730,7 @@ namespace ControllerLab
                 // Dynamic demo never supplies a MotionSample. Synchronizing here clears
                 // any prior real-device pose instead of carrying it into demonstration mode.
                 motionManager.Synchronize(latestControllerStates);
+                dualSenseAdvancedManager.Synchronize(latestControllerStates, motionManager);
             }
             // This is the only point where the WPF-bound device collection changes.
             // Sampling continues on its background thread and never touches the UI.
@@ -4881,6 +4898,7 @@ namespace ControllerLab
                     ControllerState[] states = deviceManager.Scan();
                     latestControllerStates = states;
                     motionManager.Synchronize(states);
+                    dualSenseAdvancedManager.Synchronize(states, motionManager);
                     RecordTriggerTelemetry(states);
                     latestInput = states.Length > 0 ? states[0].ToInputSnapshot() : new InputSnapshot();
                     Interlocked.Increment(ref samplingTicks);
@@ -6261,6 +6279,7 @@ namespace ControllerLab
         public double AccelerometerZ;
         public MotionSample Motion;
         public string LightbarState;
+        public string BatteryChargingState;
         // True DualSense touch data is supplied only by a validated native HID report. XInput and demo
         // paths intentionally leave these fields empty instead of inventing input.
         public bool TouchCoordinatesAvailable;
@@ -6310,6 +6329,7 @@ namespace ControllerLab
                 AccelerometerZ = AccelerometerZ,
                 Motion = Motion == null ? null : Motion.Copy(),
                 LightbarState = LightbarState,
+                BatteryChargingState = BatteryChargingState,
                 TouchCoordinatesAvailable = TouchCoordinatesAvailable,
                 HasTouchCoordinates = HasTouchCoordinates,
                 TouchPoint1 = TouchPoint1 == null ? null : TouchPoint1.Copy(),
@@ -7338,10 +7358,12 @@ namespace ControllerLab
 
             byte[] usb = new byte[64];
             usb[0] = 0x01;
+            usb[10] = 0x02;
+            usb[53] = 0x15;
             WriteSyntheticTouch(usb, 33, 3, true, 960, 540);
             WriteSyntheticTouch(usb, 37, 4, false, 120, 890);
-            if (!manager.TryParseDualSense(usb, "SELFTEST#USB", "有线", out state) || !state.TouchCoordinatesAvailable || state.TouchPoint1 == null || !state.TouchPoint1.IsActive || state.TouchPoint1.Id != 3 || state.TouchPoint1.RawX != 960 || state.TouchPoint1.RawY != 540 || state.TouchPoint2 == null || state.TouchPoint2.IsActive) throw new InvalidOperationException("USB touch layout self-test failed.");
-            passed.Add("usb-0x01-64");
+            if (!manager.TryParseDualSense(usb, "SELFTEST#USB", "有线", out state) || !state.TouchpadPressed || !state.TouchCoordinatesAvailable || state.TouchPoint1 == null || !state.TouchPoint1.IsActive || state.TouchPoint1.Id != 3 || state.TouchPoint1.RawX != 960 || state.TouchPoint1.RawY != 540 || state.TouchPoint1.X < 0.49 || state.TouchPoint1.X > 0.51 || state.TouchPoint1.Y < 0.49 || state.TouchPoint1.Y > 0.51 || state.TouchPoint2 == null || state.TouchPoint2.IsActive || state.BatteryPercent != 50 || state.BatteryChargingState != "charging" || state.LightbarState != "not-parsed") throw new InvalidOperationException("USB touch/button/battery layout self-test failed.");
+            passed.Add("usb-0x01-touch-press-battery-lightbar-boundary");
 
             byte[] bluetooth = new byte[78];
             bluetooth[0] = 0x31;
@@ -7479,7 +7501,10 @@ namespace ControllerLab
                 state.AccelerometerZ = state.Motion.AccelZ;
                 UpdateMotionRate(state.Motion.TimestampUtc);
             }
-            state.LightbarState = "available";
+            // The input report does not expose the currently displayed RGB color in a
+            // form this project has verified. Keep the field explicit instead of
+            // presenting physical lightbar presence as a parsed state.
+            state.LightbarState = "not-parsed";
             if (layout.HasTouchCoordinates && crcValidated && HasIndices(data, layout.TouchOffset, layout.TouchOffset + 7))
             {
                 state.TouchPoint1 = ParseDualSenseTouchPoint(data, layout.TouchOffset);
@@ -7802,7 +7827,9 @@ namespace ControllerLab
             int capacity = status & 0x0F;
             if (capacity > 10) return;
             state.BatteryPercent = Math.Min(100, capacity * 10);
-            state.Battery = (status & 0xF0) != 0 ? "充电中" : state.BatteryPercent >= 90 ? "满电" : state.BatteryPercent >= 40 ? "使用中" : "低电量";
+            int powerState = (status >> 4) & 0x0F;
+            state.BatteryChargingState = powerState == 1 ? "charging" : powerState == 2 ? "complete" : powerState == 0 ? "discharging" : "unknown";
+            state.Battery = powerState == 1 ? "充电中" : powerState == 2 ? "已充满" : state.BatteryPercent >= 90 ? "满电" : state.BatteryPercent >= 40 ? "使用中" : "低电量";
         }
 
         private static void ApplyDualShock4Battery(InputSnapshot state, byte status)

@@ -10,7 +10,7 @@ ControllerLab 是一个 Windows 原生 WPF 手柄检测与实时可视化工具�
 - Xbox XInput 与 DualSense 原生 HID 统一为公共控制器状态，UI 不直接读取底层报告。
 - Xbox / DualSense 实时按键、D-pad、摇杆、肩键和扳机可视化。
 - 按键测试、摇杆静止漂移 / 范围检测、建议死区和最近 5 秒 LT / RT 历史曲线。
-- DualSense 完整 HID 报告可解析触摸板按压、最多两点触点以及运动数据；没有真实字段时明确显示不可用。
+- DualSense 高级检测页分为触摸板、陀螺仪、灯带与电量、自适应扳机：支持双指有界轨迹、24×12 覆盖图、五步触摸检测、静止校准、姿态融合和六轴诊断；未验证输出明确禁用。
 - 专业震动实验室：Xbox 左右电机与 DualSense 基础双通道输出、14 个数据化预设、25 Hz 时间线、自定义预设、设备校准及紧急停止。
 - “完整检测”向导按设备能力串联按键、十字键、摇杆、扳机、震动及可用的 DualSense 触摸板 / 陀螺仪检测，并生成健康评分。
 - 健康报告保存为本地 JSON 与 Markdown，支持历史查看、删除、重新检测及 JSON / Markdown 导出。
@@ -75,7 +75,7 @@ ControllerLab 是一个 Windows 原生 WPF 手柄检测与实时可视化工具�
 2. 在**设备首页**选择目标设备。
 3. 在**实时可视化**观察输入反馈；动态演示不能代替真实检测。
 4. 在**按键检测**逐项按下按键；在**摇杆检测**中先松开摇杆再开始静止采样，并按提示完成范围测试。
-5. 在**体感**页仅使用应用确认可用的真实 DualSense 运动数据。
+5. 在 **DS 高级**页查看真实触摸轨迹、覆盖图、六轴原始量与姿态；灯带和自适应扳机在 USB / 蓝牙实机验证前保持禁用。
 6. 在**震动测试**中从默认 `40% / 5 秒` 开始；可编辑 Left/Right 时间线、保存自定义预设或执行安全感知校准。震动运行期间不能进行静止漂移或陀螺仪静止校准。
 7. 如需像素级微调 Overlay，使用应用内校准入口。用户 override 写入 LocalAppData，默认资源不会被覆盖。
 8. 在顶部进入**完整检测**可运行分步健康向导；跳过项显示“未检测”且不参与评分，不支持项不会出现在设备的检测步骤中。
@@ -94,7 +94,8 @@ ControllerLab/
 ├─ RumbleStudioPage.cs     # 专业震动页、时间线曲线和节点编辑器
 ├─ ControllerHealth*.cs    # 完整检测向导、评分、报告存储和原生 WPF 页面
 ├─ Joystick*.cs            # 专业摇杆采样、分析、视图模型与单项页面
-├─ DualSenseMotion*.cs     # 运动解析、融合与可视化
+├─ DualSenseMotion*.cs     # 运动解析、校准、融合与姿态可视化
+├─ DualSenseAdvanced*.cs   # 触摸/六轴分析、设备校准和四分区高级页
 ├─ XboxOverlay.cs          # Xbox Overlay、配置和校准
 ├─ ControllerLabTheme.cs   # 代码式 WPF 主题
 ├─ ControllerLab.sln       # Visual Studio 解决方案
@@ -110,6 +111,7 @@ ControllerLab/
 - [UI 与 Overlay 规则](docs/UI_RULES.md)
 - [设计决策](docs/DECISIONS.md)
 - [测试与回归](docs/TESTING.md)
+- [DualSense 高级检测实现说明](DUALSENSE_ADVANCED_NOTES.md)
 - [路线图](docs/ROADMAP.md)
 
 ## 当前限制

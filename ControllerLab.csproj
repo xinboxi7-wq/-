@@ -52,6 +52,8 @@
     <Compile Include="ControllerHealthCheckPage.cs" />
     <Compile Include="DualSenseMotion.cs" />
     <Compile Include="DualSenseMotionVisual.cs" />
+    <Compile Include="DualSenseAdvanced.cs" />
+    <Compile Include="DualSenseAdvancedPage.cs" />
     <Compile Include="XboxOverlay.cs" />
     <Compile Include="ControllerLabTheme.cs" />
     <Compile Include="ControllerLab.cs" />
@@ -93,6 +95,7 @@
     <None Include="build.ps1" />
     <None Include="README.md" />
     <None Include="RUMBLE_TEST_NOTES.md" />
+    <None Include="DUALSENSE_ADVANCED_NOTES.md" />
     <Content Include="Tools\GenerateDualSenseRegions\generate_dualsense_regions.py" />
     <Content Include="Tools\GenerateDualSenseRegions\README.md" />
     <Content Include="Tools\GenerateXboxTopRegions\generate_xbox_top_regions.py" />

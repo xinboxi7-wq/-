@@ -77,6 +77,7 @@ namespace ControllerLab
         public MotionSample Motion;
         public bool MicrophoneButton;
         public string LightbarState = "unknown";
+        public string BatteryChargingState = "unknown";
     }
 
     public sealed class XboxControllerExtensions
@@ -156,6 +157,7 @@ namespace ControllerLab
                 TouchPoint1 = DualSense != null && DualSense.TouchPoints.Length > 0 ? DualSense.TouchPoints[0] : null,
                 TouchPoint2 = DualSense != null && DualSense.TouchPoints.Length > 1 ? DualSense.TouchPoints[1] : null,
                 Motion = DualSense != null && DualSense.Motion != null ? DualSense.Motion.Copy() : null,
+                BatteryChargingState = DualSense == null ? "unknown" : DualSense.BatteryChargingState,
                 GyroscopeX = DualSense != null && DualSense.Motion != null ? DualSense.Motion.GyroX : 0,
                 GyroscopeY = DualSense != null && DualSense.Motion != null ? DualSense.Motion.GyroY : 0,
                 GyroscopeZ = DualSense != null && DualSense.Motion != null ? DualSense.Motion.GyroZ : 0,
@@ -230,7 +232,8 @@ namespace ControllerLab
                     AccelerometerY = snapshot.AccelerometerY,
                     AccelerometerZ = snapshot.AccelerometerZ,
                     Motion = snapshot.Motion == null ? null : snapshot.Motion.Copy(),
-                    LightbarState = snapshot.LightbarState ?? "available"
+                    LightbarState = snapshot.LightbarState ?? "not-parsed",
+                    BatteryChargingState = snapshot.BatteryChargingState ?? "unknown"
                 };
             }
             else

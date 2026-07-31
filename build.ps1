@@ -44,6 +44,8 @@ $compilerArgs = @(
     (Join-Path $project 'ControllerHealthCheckPage.cs')
     (Join-Path $project 'DualSenseMotion.cs')
     (Join-Path $project 'DualSenseMotionVisual.cs')
+    (Join-Path $project 'DualSenseAdvanced.cs')
+    (Join-Path $project 'DualSenseAdvancedPage.cs')
     (Join-Path $project 'XboxOverlay.cs')
     (Join-Path $project 'ControllerLabTheme.cs')
     (Join-Path $project 'ControllerLab.cs')

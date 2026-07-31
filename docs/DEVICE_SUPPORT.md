@@ -37,11 +37,13 @@
 | 触摸板按压 | Implemented, unverified | Implemented, unverified | 由完整报告中的按压位驱动。 |
 | 单指 / 双指触点 | Implemented, unverified | Partially supported | USB 完整 `0x01` 和蓝牙完整 `0x31` 最多解析两点；蓝牙紧凑兼容 `0x01` 明确不可用。 |
 | 陀螺仪 / 加速度计 | Implemented, unverified | Partially supported | 完整 USB / BT 报告支持；BT 需 CRC 通过；紧凑兼容报告不支持。 |
-| 电量 | Partially supported | Partially supported | 依赖当前 HID 报告提供的状态字段。 |
+| 电量 / 充电状态 | Partially supported | Partially supported | 依赖完整报告 body +52；未知枚举不猜测。 |
 | 基础双通道震动 | Implemented, unverified | Implemented, unverified | USB `0x02` 长度 63；BT `0x31` 长度 78 且含 CRC；两种模式均尚待实机输出确认。 |
 | 高级触觉反馈 | Unsupported | Unsupported | 当前震动模块只实现基础双通道输出。 |
-| 自适应扳机 | Unsupported | Unsupported | 当前没有输出控制实现。 |
-| 灯带控制 | Unsupported | Unsupported | 状态模型保留 Lightbar 字段；没有控制 UI / 输出实现。 |
+| 自适应扳机 | Unsupported | Unsupported | 已有独立能力接口和禁用 UI 占位；USB / BT 均待实机验证，当前不发送输出。 |
+| 灯带控制 | Unsupported | Unsupported | 当前没有解析实际 RGB 状态；已有禁用 UI 占位，USB / BT 均待实机验证。 |
+| 触摸轨迹 / 覆盖检测 | Implemented, unverified | Partially supported | 完整报告支持 Contact ID、双指、24×12 覆盖图和五步检测；蓝牙紧凑报告不支持。 |
+| 六轴静止校准 / 姿态 / 诊断 | Implemented, unverified | Partially supported | 完整报告支持；BT 需 CRC，紧凑报告不支持；物理轴方向与噪声阈值待实机确认。 |
 | 麦克风按钮 | Implemented, unverified | Implemented, unverified | 当前解析并进入 DualSense 扩展状态。 |
 
 ## DUALSHOCK 4

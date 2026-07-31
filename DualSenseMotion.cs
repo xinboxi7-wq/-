@@ -216,6 +216,31 @@ namespace ControllerLab
             if (State == MotionCalibrationState.Settling || State == MotionCalibrationState.Sampling) Fail(reason);
         }
 
+        public void Cancel(string reason)
+        {
+            if (State == MotionCalibrationState.Settling || State == MotionCalibrationState.Sampling) Fail(string.IsNullOrEmpty(reason) ? "校准已取消。" : reason);
+        }
+
+        public bool Apply(MotionCalibrationResult saved, string id, out string reason)
+        {
+            if (saved == null || !saved.IsValid || saved.SampleCount < MinimumSamples)
+            {
+                reason = "保存的校准数据无效或样本不足。";
+                return false;
+            }
+            if (string.IsNullOrEmpty(id))
+            {
+                reason = "未找到可应用校准的 DualSense 设备。";
+                return false;
+            }
+            Result = saved.Copy();
+            Result.DeviceId = id;
+            deviceId = id;
+            State = MotionCalibrationState.Calibrated;
+            reason = string.Empty;
+            return true;
+        }
+
         public void Reset()
         {
             State = MotionCalibrationState.NotCalibrated;
@@ -307,6 +332,7 @@ namespace ControllerLab
         private const double RadiansToDegrees = 180.0 / Math.PI;
         private const double ProportionalGain = 0.55;
         private const double MaximumDeltaSeconds = 0.10;
+        private readonly bool useAccelerometerCorrection;
         private MotionQuaternion quaternion = MotionQuaternion.Identity;
         private DateTime lastTimestamp = DateTime.MinValue;
         private double centerPitch;
@@ -319,6 +345,13 @@ namespace ControllerLab
             CalibrationState = MotionCalibrationState.NotCalibrated,
             TrackingQuality = MotionTrackingQuality.Uncalibrated
         };
+
+        public MotionFusionService() : this(true) { }
+
+        public MotionFusionService(bool accelerometerCorrection)
+        {
+            useAccelerometerCorrection = accelerometerCorrection;
+        }
 
         public void Reset()
         {
@@ -381,7 +414,7 @@ namespace ControllerLab
         private void IntegrateMahony(double gx, double gy, double gz, double ax, double ay, double az, double delta)
         {
             double magnitude = Math.Sqrt(ax * ax + ay * ay + az * az);
-            if (magnitude > 0.0001 && !double.IsNaN(magnitude) && !double.IsInfinity(magnitude))
+            if (useAccelerometerCorrection && magnitude > 0.0001 && !double.IsNaN(magnitude) && !double.IsInfinity(magnitude))
             {
                 ax /= magnitude;
                 ay /= magnitude;
@@ -468,6 +501,7 @@ namespace ControllerLab
         public bool IsAvailable;
         public string AvailabilityMessage = string.Empty;
         public MotionFusionSnapshot Pose = new MotionFusionSnapshot { Quaternion = MotionQuaternion.Identity };
+        public MotionFusionSnapshot RawPose = new MotionFusionSnapshot { Quaternion = MotionQuaternion.Identity };
         public MotionCalibrationResult Calibration = new MotionCalibrationResult();
         public MotionSample Sample;
         public MotionCalibrationState CalibrationState;
@@ -484,6 +518,7 @@ namespace ControllerLab
                 IsAvailable = IsAvailable,
                 AvailabilityMessage = AvailabilityMessage,
                 Pose = Pose == null ? null : Pose.Copy(),
+                RawPose = RawPose == null ? null : RawPose.Copy(),
                 Calibration = Calibration == null ? null : Calibration.Copy(),
                 Sample = Sample == null ? null : Sample.Copy(),
                 CalibrationState = CalibrationState,
@@ -524,6 +559,7 @@ namespace ControllerLab
     {
         private readonly object sync = new object();
         private readonly MotionFusionService fusion = new MotionFusionService();
+        private readonly MotionFusionService rawFusion = new MotionFusionService(false);
         private readonly MotionCalibrationService calibration = new MotionCalibrationService();
         private readonly MotionHistoryBuffer history = new MotionHistoryBuffer();
         private long lastSequence = -1;
@@ -549,6 +585,7 @@ namespace ControllerLab
                 lastSequence = sample.Sequence;
                 calibration.Update(state.DeviceId, sample, now);
                 state.Pose = fusion.Update(sample, calibration.Result, now);
+                state.RawPose = rawFusion.Update(sample, calibration.Result, now);
                 state.Calibration = calibration.Result.Copy();
                 state.CalibrationState = calibration.State;
                 state.TrackingQuality = state.Pose.TrackingQuality;
@@ -593,6 +630,7 @@ namespace ControllerLab
                     return false;
                 }
                 fusion.Recenter();
+                rawFusion.Recenter();
                 reason = string.Empty;
                 return true;
             }
@@ -603,10 +641,12 @@ namespace ControllerLab
             lock (sync)
             {
                 fusion.Reset();
+                rawFusion.Reset();
                 calibration.Reset();
                 history.Clear();
                 lastSequence = -1;
                 state.Pose = new MotionFusionSnapshot { Quaternion = MotionQuaternion.Identity, CalibrationState = MotionCalibrationState.NotCalibrated, TrackingQuality = MotionTrackingQuality.Uncalibrated };
+                state.RawPose = new MotionFusionSnapshot { Quaternion = MotionQuaternion.Identity, CalibrationState = MotionCalibrationState.NotCalibrated, TrackingQuality = MotionTrackingQuality.Uncalibrated };
                 state.Calibration = new MotionCalibrationResult();
                 state.CalibrationState = MotionCalibrationState.NotCalibrated;
                 state.TrackingQuality = MotionTrackingQuality.Uncalibrated;
@@ -626,6 +666,35 @@ namespace ControllerLab
             }
         }
 
+        public bool ApplyCalibration(string deviceId, MotionCalibrationResult result, out string reason)
+        {
+            lock (sync)
+            {
+                if (!state.IsAvailable || !string.Equals(deviceId, state.DeviceId, StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "当前设备或输入模式未提供运动传感器数据。";
+                    return false;
+                }
+                bool applied = calibration.Apply(result, deviceId, out reason);
+                if (applied)
+                {
+                    state.Calibration = calibration.Result.Copy();
+                    state.CalibrationState = calibration.State;
+                }
+                return applied;
+            }
+        }
+
+        public void CancelCalibration(string reason)
+        {
+            lock (sync)
+            {
+                calibration.Cancel(reason);
+                state.Calibration = calibration.Result.Copy();
+                state.CalibrationState = calibration.State;
+            }
+        }
+
         private void MarkUnavailable(ControllerState controller, MotionSample sample)
         {
             bool wasCalibrating = calibration.State == MotionCalibrationState.Settling || calibration.State == MotionCalibrationState.Sampling;
@@ -637,6 +706,7 @@ namespace ControllerLab
             else reason = "当前连接模式未提供完整的 DualSense 运动传感器报告。";
             if (wasCalibrating) calibration.MarkUnavailable("校准已中断：" + reason);
             fusion.Reset();
+            rawFusion.Reset();
             history.Clear();
             lastSequence = -1;
             state.IsAvailable = false;
@@ -646,6 +716,7 @@ namespace ControllerLab
             state.CalibrationState = calibration.State == MotionCalibrationState.Failed ? MotionCalibrationState.Failed : MotionCalibrationState.Unsupported;
             state.TrackingQuality = MotionTrackingQuality.Unsupported;
             state.Pose = new MotionFusionSnapshot { Quaternion = MotionQuaternion.Identity, CalibrationState = state.CalibrationState, TrackingQuality = MotionTrackingQuality.Unsupported, HasPose = false };
+            state.RawPose = new MotionFusionSnapshot { Quaternion = MotionQuaternion.Identity, CalibrationState = state.CalibrationState, TrackingQuality = MotionTrackingQuality.Unsupported, HasPose = false };
             state.LastUpdatedUtc = DateTime.UtcNow;
         }
     }
@@ -726,6 +797,29 @@ namespace ControllerLab
                     return false;
                 }
                 return session.Recenter(deviceId, out reason);
+            }
+        }
+
+        public bool ApplyCalibration(string deviceId, MotionCalibrationResult result, out string reason)
+        {
+            lock (sync)
+            {
+                DualSenseMotionSession session;
+                if (!sessions.TryGetValue(deviceId ?? string.Empty, out session))
+                {
+                    reason = "当前设备或输入模式未提供运动传感器数据。";
+                    return false;
+                }
+                return session.ApplyCalibration(deviceId, result, out reason);
+            }
+        }
+
+        public void CancelCalibration(string deviceId, string reason)
+        {
+            lock (sync)
+            {
+                DualSenseMotionSession session;
+                if (sessions.TryGetValue(deviceId ?? string.Empty, out session)) session.CancelCalibration(reason);
             }
         }
 
