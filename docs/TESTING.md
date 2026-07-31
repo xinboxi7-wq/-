@@ -1,5 +1,13 @@
 # 测试与回归指南
 
+新增摇杆专业分析自检：
+
+```powershell
+.\ControllerLab_Test.exe --joystick-analyzer-selftest
+```
+
+该命令固定验证 10 类构造数据：低漂移中心、右漂、噪声标准差、完整圆、缺失象限、方形限制、回中过冲、多次反弹、死区不得低于最大漂移，以及空样本安全返回。
+
 ## 构建环境
 
 - **目标框架：** .NET Framework 4.8。

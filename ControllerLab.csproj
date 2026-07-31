@@ -42,6 +42,9 @@
   <ItemGroup>
     <Compile Include="ControllerCore.cs" />
     <Compile Include="ControllerRumble.cs" />
+    <Compile Include="JoystickAnalyzer.cs" />
+    <Compile Include="JoystickTestViewModel.cs" />
+    <Compile Include="JoystickTestPage.cs" />
     <Compile Include="DualSenseMotion.cs" />
     <Compile Include="DualSenseMotionVisual.cs" />
     <Compile Include="XboxOverlay.cs" />

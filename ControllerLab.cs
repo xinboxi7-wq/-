@@ -221,6 +221,11 @@ namespace ControllerLab
                 Console.WriteLine(ControllerCoreSelfTest.RunStickDriftSelfTest());
                 return;
             }
+            if (HasArgument("--joystick-analyzer-selftest"))
+            {
+                Console.WriteLine(JoystickAnalyzerSelfTest.Run());
+                return;
+            }
             if (HasArgument("--device-manager-selftest"))
             {
                 Console.WriteLine(ControllerCoreSelfTest.RunDeviceManagerSelfTest());
@@ -740,6 +745,8 @@ namespace ControllerLab
         private volatile InputSnapshot latestInput = new InputSnapshot();
         private volatile ControllerState[] latestControllerStates = new ControllerState[0];
         private readonly ControllerRumbleController rumbleController;
+        private readonly JoystickTestViewModel joystickTestViewModel;
+        private JoystickTestPage joystickTestPage;
 
         [DllImport("winmm.dll")]
         private static extern uint timeBeginPeriod(uint period);
@@ -770,6 +777,7 @@ namespace ControllerLab
             input = new InputManager();
             sonyInput = new SonyInputManager();
             rumbleController = new ControllerRumbleController(input, sonyInput);
+            joystickTestViewModel = new JoystickTestViewModel();
             deviceManager = new ControllerDeviceManager(input, sonyInput);
             motionManager = new DualSenseMotionManager();
             Title = "手柄实验室";
@@ -868,8 +876,10 @@ namespace ControllerLab
             {
                 StopRenderLoop();
                 StopSampling();
+                if (joystickTestPage != null) joystickTestPage.Cancel("应用退出，摇杆检测已取消");
                 rumbleController.Dispose();
                 stickDriftTestEngine.Dispose();
+                if (joystickTestPage != null) joystickTestPage.Dispose();
                 if (!demoMode) SaveSettings();
                 if (deviceHomeView != null) deviceHomeView.Dispose();
                 deviceManager.Dispose();
@@ -1073,7 +1083,9 @@ namespace ControllerLab
             visualizerPage.Visibility = Visibility.Collapsed;
             inputTestPage = BuildInputTestPage();
             inputTestPage.Visibility = Visibility.Collapsed;
-            stickDriftTestPage = BuildStickDriftTestPage();
+            joystickTestPage = new JoystickTestPage(joystickTestViewModel);
+            stickTestThreeRunsCheck = joystickTestPage.NavigationCheckBox;
+            stickDriftTestPage = joystickTestPage;
             stickDriftTestPage.Visibility = Visibility.Collapsed;
             motionPage = BuildMotionPage();
             motionPage.Visibility = Visibility.Collapsed;
@@ -1755,7 +1767,7 @@ namespace ControllerLab
 
         private void StartRumblePattern(ControllerRumblePattern pattern)
         {
-            if (stickDriftTestEngine.IsActive)
+            if (stickDriftTestEngine.IsActive || joystickTestViewModel.IsTestActive)
             {
                 if (rumbleStatusText != null)
                 {
@@ -1830,7 +1842,7 @@ namespace ControllerLab
             }
             if (rumbleLeftVisual != null) rumbleLeftVisual.Opacity = 0.14 + snapshot.LeftStrength * 0.86;
             if (rumbleRightVisual != null) rumbleRightVisual.Opacity = 0.14 + snapshot.RightStrength * 0.86;
-            bool driftActive = stickDriftTestEngine.IsActive;
+            bool driftActive = stickDriftTestEngine.IsActive || joystickTestViewModel.IsTestActive;
             bool enabled = snapshot.IsSupported && controller != null && controller.IsConnected && controller.HasRealInput && !driftActive;
             if (rumbleStartButton != null) rumbleStartButton.IsEnabled = enabled && !snapshot.IsRunning;
             if (rumbleStopButton != null) rumbleStopButton.IsEnabled = snapshot.IsRunning;
@@ -1975,6 +1987,7 @@ namespace ControllerLab
             if (page != 3)
             {
                 if (stickDriftTestEngine.IsActive) stickDriftTestEngine.Cancel("已离开摇杆检测页面，检测未完成");
+                if (joystickTestPage != null) joystickTestPage.Cancel("已离开摇杆检测页面，检测已取消");
                 ClearStickTestVisualState();
             }
             if (previousPage == 5 && page != 5) rumbleController.Stop("已离开震动测试页面，震动已停止");
@@ -1992,7 +2005,11 @@ namespace ControllerLab
             UpdatePageButton(rumblePageButton, page == 5);
             UIElement visiblePage = page == 0 ? homePage : page == 1 ? visualizerPage : page == 2 ? inputTestPage : page == 3 ? stickDriftTestPage : page == 4 ? motionPage : rumblePage;
             LabVisualStyles.FadeIn(visiblePage, reducedMotion);
-            if (controllerNavigationEnabled) RebuildControllerNavigationTargets(true);
+            if (controllerNavigationEnabled)
+            {
+                visiblePage.UpdateLayout();
+                RebuildControllerNavigationTargets(true);
+            }
         }
 
         // Controller navigation is intentionally opt-in so a formal button test
@@ -2110,6 +2127,10 @@ namespace ControllerLab
             ClearControllerNavigationHighlight();
             controllerNavigationTargets.Clear();
             CollectControllerNavigationTargets(CurrentPageRoot);
+            // The professional stick page keeps its trace toggle in a ScrollViewer.
+            // Add it explicitly because WPF may not materialize off-viewport logical
+            // children during the navigation self-test or at compact window sizes.
+            if (currentPage == 3) AddControllerNavigationTarget(stickTestThreeRunsCheck);
             // The visualizer is intentionally almost pure rendering, so it has
             // no page-body buttons in some device states. Keep D-pad/A useful
             // there by exposing the always-visible shell controls as a fallback.
@@ -2245,6 +2266,7 @@ namespace ControllerLab
             ScrollViewer viewer = FindAncestorScrollViewer(controllerNavigationHighlightedTarget) ?? FindFirstScrollViewer(CurrentPageRoot);
             if (viewer == null) return;
             viewer.ScrollToVerticalOffset(Math.Max(0, Math.Min(viewer.ScrollableHeight, viewer.VerticalOffset + delta)));
+            viewer.UpdateLayout();
         }
 
         private static ScrollViewer FindAncestorScrollViewer(DependencyObject source)
@@ -3546,6 +3568,7 @@ namespace ControllerLab
             inputTestEngine.Reset(currentControllerState);
             stickTriggerTestEngine.Reset(currentControllerState);
             stickDriftTestEngine.Reset(null);
+            if (joystickTestPage != null) joystickTestPage.ResetForDeviceChange("设备已切换，摇杆检测已取消");
             ClearStickTestVisualState();
             if (motionPoseView != null) motionPoseView.SetState(null);
             nextMotionUiRefresh = DateTime.MinValue;
@@ -3569,6 +3592,7 @@ namespace ControllerLab
             selectedControllerFamily = family;
             ClearTriggerHistory();
             stickDriftTestEngine.Reset(null);
+            if (joystickTestPage != null) joystickTestPage.ResetForDeviceChange("手柄类型已切换，摇杆检测已取消");
             ClearStickTestVisualState();
             if (demoMode)
             {
@@ -4680,6 +4704,8 @@ namespace ControllerLab
             diagnostics.Update(state, demoMode ? 220.0 : actualSamplingHz, leftDeadzone.Value, rightDeadzone.Value);
             UpdateInputTestPage(selected);
             UpdateStickDriftTestPage(selected);
+            if (joystickTestPage != null && (currentPage == 3 || joystickTestViewModel.IsTestActive))
+                joystickTestPage.Update(selected, demoMode ? 220.0 : actualSamplingHz, rumbleController.IsRunning, rumbleController.LastStoppedUtc);
             UpdateMotionPage(selected);
             UpdateRumblePage(selected);
             if (guidedOverlay != null && guidedOverlay.Visibility == Visibility.Visible)
@@ -5027,6 +5053,7 @@ namespace ControllerLab
             diagnostics.Reset();
             if (demoMode) diagnostics.UseDemoBaseline();
             stickDriftTestEngine.Reset(null);
+            if (joystickTestPage != null) joystickTestPage.ResetForDeviceChange("输入模式已切换，摇杆检测已取消");
             ClearStickTestVisualState();
             ClearTriggerHistory();
             if (!demoMode) SaveSettings();
