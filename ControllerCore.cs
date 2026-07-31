@@ -3,6 +3,10 @@ using System.Collections.ObjectModel;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
+using System.Text;
 using System.Threading;
 
 namespace ControllerLab
@@ -880,6 +884,11 @@ namespace ControllerLab
 
     public sealed class ControllerStickTestResult
     {
+        // This value is assigned only after StickDriftTestEngine has accepted
+        // a real XInput/HID state. It is also used to update a range result
+        // without creating a duplicate local record for the same test.
+        public string EvidenceId = string.Empty;
+        public bool IsFormalInput;
         public string DeviceId = string.Empty;
         public string DeviceName = string.Empty;
         public ControllerType ControllerType;
@@ -891,6 +900,121 @@ namespace ControllerLab
         public StickRangeResult RightStickRange;
         public StickStabilityResult LeftStickStability;
         public StickStabilityResult RightStickStability;
+    }
+
+    [DataContract]
+    public sealed class StickTestEvidence
+    {
+        [DataMember(Order = 1)] public int SchemaVersion = 1;
+        [DataMember(Order = 2)] public string EvidenceId = string.Empty;
+        [DataMember(Order = 3)] public DateTime SavedAtUtc;
+        [DataMember(Order = 4)] public DateTime TestTimeUtc;
+        [DataMember(Order = 5)] public string DeviceId = string.Empty;
+        [DataMember(Order = 6)] public string DeviceName = string.Empty;
+        [DataMember(Order = 7)] public string ControllerType = string.Empty;
+        [DataMember(Order = 8)] public string InputSource = string.Empty;
+        [DataMember(Order = 9)] public bool IsFormalInput;
+        [DataMember(Order = 10)] public StickDriftResult LeftStickDrift;
+        [DataMember(Order = 11)] public StickDriftResult RightStickDrift;
+        [DataMember(Order = 12)] public StickRangeResult LeftStickRange;
+        [DataMember(Order = 13)] public StickRangeResult RightStickRange;
+        [DataMember(Order = 14)] public StickStabilityResult LeftStickStability;
+        [DataMember(Order = 15)] public StickStabilityResult RightStickStability;
+
+        public static StickTestEvidence FromResult(ControllerStickTestResult result, DateTime savedAtUtc)
+        {
+            if (result == null) throw new ArgumentNullException("result");
+            if (!result.IsFormalInput) throw new InvalidOperationException("Only real controller input can be stored as formal stick-test evidence.");
+            if (result.LeftStickDrift == null || result.RightStickDrift == null) throw new InvalidOperationException("The stationary stick test is incomplete.");
+            return new StickTestEvidence
+            {
+                EvidenceId = string.IsNullOrEmpty(result.EvidenceId) ? Guid.NewGuid().ToString("N") : result.EvidenceId,
+                SavedAtUtc = savedAtUtc,
+                TestTimeUtc = result.TestTime,
+                DeviceId = result.DeviceId ?? string.Empty,
+                DeviceName = result.DeviceName ?? string.Empty,
+                ControllerType = result.ControllerType.ToString(),
+                InputSource = result.InputSource.ToString(),
+                IsFormalInput = true,
+                LeftStickDrift = result.LeftStickDrift,
+                RightStickDrift = result.RightStickDrift,
+                LeftStickRange = result.LeftStickRange,
+                RightStickRange = result.RightStickRange,
+                LeftStickStability = result.LeftStickStability,
+                RightStickStability = result.RightStickStability
+            };
+        }
+
+        public string ToChineseReport()
+        {
+            return string.Format(CultureInfo.InvariantCulture,
+                "ControllerLab 摇杆专业检测 · 第一阶段\n检测时间：{0:yyyy-MM-dd HH:mm:ss} UTC\n保存时间：{1:yyyy-MM-dd HH:mm:ss} UTC\n设备：{2}\n设备 ID：{3}\n设备类型：{4}\n输入来源：{5}\n正式实测输入：是\n记录 ID：{6}\n\n左摇杆\n{7}\n{8}\n{9}\n\n右摇杆\n{10}\n{11}\n{12}\n\n说明：本记录仅由已通过真实 XInput 或 DualSense HID 门控的检测会话生成。无效结果表示采样期间可能触碰摇杆，应重新检测；它不等同于硬件故障结论。",
+                TestTimeUtc, SavedAtUtc, DeviceName, string.IsNullOrEmpty(DeviceId) ? "—" : DeviceId, ControllerType, InputSource, EvidenceId,
+                FormatDrift("静止漂移", LeftStickDrift), FormatStability(LeftStickStability), FormatRange(LeftStickRange),
+                FormatDrift("静止漂移", RightStickDrift), FormatStability(RightStickStability), FormatRange(RightStickRange));
+        }
+
+        private static string FormatDrift(string label, StickDriftResult result)
+        {
+            if (result == null) return label + "：未完成";
+            if (!result.IsValid) return string.Format(CultureInfo.InvariantCulture, "{0}：无效（{1}）", label, string.IsNullOrEmpty(result.InvalidReason) ? "请重新检测" : result.InvalidReason);
+            string health = result.Health == null ? "待评分" : JoystickHealthAnalyzer.Label(result.Health) + " " + result.Health.Score.ToString(CultureInfo.InvariantCulture) + "/100";
+            return string.Format(CultureInfo.InvariantCulture, "{0}：{1}；健康 {2}；中心偏移 {3:0.0}%；P95 {4:0.0}%；噪声 {5:0.00}%；建议死区 {6:0.0}%",
+                label, StickDriftTestEngine.RatingLabel(result), health, result.CenterOffsetPercent, result.P95DriftPercent, result.StandardDeviation * 100.0, result.SuggestedDeadzonePercent);
+        }
+
+        private static string FormatStability(StickStabilityResult result)
+        {
+            if (result == null || result.CompletedRuns == 0) return "连续检测：未进行";
+            return string.Format(CultureInfo.InvariantCulture, "连续检测：{0}（{1}/{2} 次，平均 P95 {3:0.0}%，最大差异 {4:0.0}%）", result.Status, result.CompletedRuns, result.TargetRuns, result.AverageP95DriftPercent, result.MaximumDifferencePercent);
+        }
+
+        private static string FormatRange(StickRangeResult result)
+        {
+            if (result == null || result.SampleCount == 0) return "范围测试：未进行";
+            return string.Format(CultureInfo.InvariantCulture, "范围测试：{0}（上/下/左/右 {1:0}%/{2:0}%/{3:0}%/{4:0}%；外圈覆盖 {5:0}%；缺失 {6}）",
+                result.Status, result.MaxUp * 100.0, result.MaxDown * 100.0, result.MaxLeft * 100.0, result.MaxRight * 100.0, result.CoveragePercent, string.IsNullOrEmpty(result.MissingDirections) ? "—" : result.MissingDirections);
+        }
+    }
+
+    public sealed class StickTestEvidenceSaveResult
+    {
+        public string JsonPath = string.Empty;
+        public string TextPath = string.Empty;
+    }
+
+    // Evidence storage is deliberately separate from device I/O and the WPF UI.
+    // The store accepts only a completed, formal result and writes an overwrite-safe
+    // pair keyed by EvidenceId: structured JSON plus a directly readable Chinese report.
+    public static class StickTestEvidenceStore
+    {
+        public static string DefaultDirectory
+        {
+            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ControllerLab", "stick-test-records"); }
+        }
+
+        public static StickTestEvidenceSaveResult Save(ControllerStickTestResult result)
+        {
+            return Save(result, DefaultDirectory, DateTime.UtcNow);
+        }
+
+        public static StickTestEvidenceSaveResult Save(ControllerStickTestResult result, string directory, DateTime savedAtUtc)
+        {
+            if (string.IsNullOrEmpty(directory)) throw new ArgumentException("A record directory is required.", "directory");
+            if (result == null) throw new ArgumentNullException("result");
+            if (string.IsNullOrEmpty(result.EvidenceId)) result.EvidenceId = Guid.NewGuid().ToString("N");
+            StickTestEvidence evidence = StickTestEvidence.FromResult(result, savedAtUtc);
+            Directory.CreateDirectory(directory);
+            string baseName = "stick-test-" + evidence.EvidenceId;
+            string jsonPath = Path.Combine(directory, baseName + ".json");
+            string textPath = Path.Combine(directory, baseName + ".txt");
+            using (FileStream stream = new FileStream(jsonPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                new DataContractJsonSerializer(typeof(StickTestEvidence)).WriteObject(stream, evidence);
+            }
+            File.WriteAllText(textPath, evidence.ToChineseReport(), new UTF8Encoding(false));
+            return new StickTestEvidenceSaveResult { JsonPath = jsonPath, TextPath = textPath };
+        }
     }
 
     public static class StickDriftAnalyzer
@@ -1238,6 +1362,8 @@ namespace ControllerLab
             StickDriftResult right = StickDriftAnalyzer.Analyze(StickSide.Right, rightSamples);
             LastResult = new ControllerStickTestResult
             {
+                EvidenceId = Guid.NewGuid().ToString("N"),
+                IsFormalInput = true,
                 DeviceId = deviceId,
                 DeviceName = deviceName,
                 ControllerType = controllerType,
@@ -1593,6 +1719,19 @@ namespace ControllerLab
                 for (int i = 0; i < 2400; i++) engine.Update(xbox, testStart.AddSeconds(10.01).AddMilliseconds(i * 8));
                 Require(engine.CompletedRuns == 3 && engine.LeftStability.Status == "稳定" && engine.RightStability.Status == "稳定", "Three-run stability session failed.");
 
+                string evidenceDirectory = Path.Combine(Path.GetTempPath(), "ControllerLab-stick-evidence-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    StickTestEvidenceSaveResult saved = StickTestEvidenceStore.Save(engine.LastResult, evidenceDirectory, testStart.AddSeconds(24));
+                    Require(File.Exists(saved.JsonPath) && File.Exists(saved.TextPath), "Formal stick-test evidence files were not written.");
+                    string savedText = File.ReadAllText(saved.TextPath);
+                    Require(savedText.IndexOf("摇杆专业检测", StringComparison.Ordinal) >= 0 && savedText.IndexOf("正式实测输入：是", StringComparison.Ordinal) >= 0, "Saved Chinese evidence report is incomplete.");
+                }
+                finally
+                {
+                    if (Directory.Exists(evidenceDirectory)) Directory.Delete(evidenceDirectory, true);
+                }
+
                 engine.Start(xbox, testStart.AddSeconds(25));
                 dualSense.IsConnected = false;
                 engine.Update(dualSense, testStart.AddSeconds(25.5));
@@ -1629,7 +1768,7 @@ namespace ControllerLab
             {
                 engine.Dispose();
             }
-            return "Stick drift self-test passed: centered, 2%, 5%, 10%, 15%, single spike, sustained movement, Xbox/DualSense shared engine, three-run stability, disconnect cancellation, range coverage, demo gating.";
+            return "Stick drift self-test passed: centered, 2%, 5%, 10%, 15%, single spike, sustained movement, Xbox/DualSense shared engine, three-run stability, local evidence record, disconnect cancellation, range coverage, demo gating.";
         }
 
         private static List<StickSample> BuildSamples(int count, double x, double y)

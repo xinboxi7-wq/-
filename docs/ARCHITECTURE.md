@@ -26,7 +26,7 @@ ControllerLab.sln
 | 设备首页 | 页面 0 | `MainWindow`、`DeviceCard`、`ControllerDeviceManager` |
 | 实时可视化 | 页面 1 | `ControllerVisualizerView`、`ControllerVisual`、`DualSenseVisual` |
 | 按键检测 | 页面 2 | `InputTestSession`、`ControllerTestReport` |
-| 摇杆检测 | 页面 3 | `StickDriftTestEngine`、`StickDriftAnalyzer`、范围跟踪器 |
+| 摇杆检测 | 页面 3 | `StickDriftTestEngine`、`StickDriftAnalyzer`、范围跟踪器、`StickTestEvidenceStore` |
 | 体感 | 页面 4 | `DualSenseMotionManager`、`MotionFusionService`、`DualSenseMotionPoseView` |
 | 震动测试 | 页面 5 | `ControllerRumbleController`、`IControllerRumbleService` |
 
@@ -112,6 +112,7 @@ Assets/dualsense.png + Assets/dualSenseRegions.json + Assets/dualSenseVisualStyl
 | 主资源 | `Assets/` | 手柄底图、摇杆帽、Alpha Mask、区域 JSON 与样式 JSON |
 | 离线工具 | `Tools/GenerateDualSenseRegions/`、`Tools/GenerateXboxTopRegions/`、`Tools/GenerateXboxDPadRegions/` | 开发期生成 / 审核工具，不是运行时依赖 |
 | 崩溃日志 | `%LocalAppData%\ControllerLab\logs\crash.log` | `App.RecordUnhandledException` 写入 |
+| 摇杆实测记录 | `%LocalAppData%\ControllerLab\stick-test-records\` | 用户在摇杆页保存的 JSON 结构记录和 UTF-8 中文 TXT 报告；仅接受完成的真实 XInput / DualSense HID 检测结果，同一 `EvidenceId` 的范围补充会更新同一对文件 |
 | 构建 | `build.ps1` | 调用本机 .NET Framework 4.8 x64 WPF 编译器 |
 | 可执行自检 | `ControllerLab.cs` 的命令行开关 | 启动、运行时、导航、核心、漂移、设备、触摸、运动、Overlay、扳机曲线和震动 |
 

@@ -654,6 +654,7 @@ namespace ControllerLab
         private Button stickRangeStartButton;
         private Button stickRangeStopButton;
         private Button stickTestCopyButton;
+        private Button stickTestSaveButton;
         private bool stickTestVisualsClearedForUnavailableState;
         private bool showStickRangeVisuals;
         private string stickTestRenderedDeviceId;
@@ -1212,7 +1213,9 @@ namespace ControllerLab
             stickRangeStopButton.Click += delegate { EndStickRangeTest(); };
             stickTestCopyButton = MakeButton("复制结果", false);
             stickTestCopyButton.Click += delegate { CopyStickDriftResult(); };
-            Button[] actionsList = { stickTestStartButton, stickTestRestartButton, stickTestStopButton, stickRangeStartButton, stickRangeStopButton, stickTestCopyButton };
+            stickTestSaveButton = MakeButton("保存实测记录", false);
+            stickTestSaveButton.Click += delegate { SaveStickTestEvidence(); };
+            Button[] actionsList = { stickTestStartButton, stickTestRestartButton, stickTestStopButton, stickRangeStartButton, stickRangeStopButton, stickTestCopyButton, stickTestSaveButton };
             for (int i = 0; i < actionsList.Length; i++)
             {
                 actionsList[i].Height = 34;
@@ -2539,6 +2542,26 @@ namespace ControllerLab
             }
         }
 
+        private void SaveStickTestEvidence()
+        {
+            ControllerStickTestResult result = stickDriftTestEngine.LastResult;
+            if (result == null || !result.IsFormalInput)
+            {
+                if (footerStatus != null) footerStatus.Text = "请先完成一次真实手柄的静止摇杆检测，再保存实测记录。";
+                return;
+            }
+            try
+            {
+                StickTestEvidenceSaveResult saved = StickTestEvidenceStore.Save(result);
+                if (stickTestStatusText != null) stickTestStatusText.Text = "实测记录已保存，可在本地复查或附到问题反馈。";
+                if (footerStatus != null) footerStatus.Text = "已保存中文报告：" + saved.TextPath;
+            }
+            catch (Exception ex)
+            {
+                if (footerStatus != null) footerStatus.Text = "保存实测记录失败：" + ex.Message;
+            }
+        }
+
         private void ClearStickTestVisualState()
         {
             leftPlot.ClearHistory();
@@ -2655,6 +2678,7 @@ namespace ControllerLab
             if (stickRangeStartButton != null) stickRangeStartButton.IsEnabled = connected && !stickDriftTestEngine.IsActive;
             if (stickRangeStopButton != null) stickRangeStopButton.IsEnabled = rangeActive;
             if (stickTestCopyButton != null) stickTestCopyButton.IsEnabled = formalInput && stickDriftTestEngine.LastResult != null;
+            if (stickTestSaveButton != null) stickTestSaveButton.IsEnabled = stickDriftTestEngine.LastResult != null && stickDriftTestEngine.LastResult.IsFormalInput;
         }
 
         private static Brush StickDriftStatusBrush(StickDriftTestEngine engine)

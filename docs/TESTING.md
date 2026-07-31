@@ -47,7 +47,7 @@
 | `--runtime-selftest` | 窗口短时显示 / 关闭 | 长时间资源、真实设备 |
 | `--controller-navigation-selftest` | 手柄导航逻辑 | 真实按键硬件 |
 | `--controller-core-selftest` | 状态适配与报告模型 | 真实 HID / XInput |
-| `--stick-drift-selftest` | 构造漂移、范围、阈值 | 真实摇杆噪声 |
+| `--stick-drift-selftest` | 构造漂移、范围、阈值、连续检测和临时目录中的实测记录 JSON/TXT 写入 | 真实摇杆噪声、驱动归一化差异 |
 | `--device-manager-selftest` | 多设备注册 / 移除逻辑 | Windows 热插拔 |
 | `--ds5-touch-parser-selftest` | USB / BT 报告布局构造数据 | 真实 DualSense 报告 |
 | `--ds5-motion-selftest` | 运动解析、CRC、融合边界 | 真实传感器精度 |
@@ -61,7 +61,7 @@
 2. 在实时页逐项按 A/B/X/Y、D-pad 四方向与斜向、View、Menu、Guide、LB/RB、L3/R3；观察局部高亮无明显偏移。
 3. 推动左右摇杆的中心、四向与四个斜向极限；确认摇杆帽位于前景、光环固定、回中重合。
 4. LT / RT 从 0% 缓慢到 100%，确认历史曲线连续且 LT 左→右、RT 右→左的视觉反馈正确。
-5. 完成按键测试和摇杆静止 / 范围测试；测试中故意触碰摇杆，确认结果被标记为无效而非严重漂移。
+5. 完成按键测试和摇杆静止 / 范围测试；测试中故意触碰摇杆，确认结果被标记为无效而非严重漂移。完成后点击“保存实测记录”，确认 `%LocalAppData%\ControllerLab\stick-test-records\` 中生成同一记录 ID 的 `.json` 和 UTF-8 `.txt`，并在测试记录中注明文件名。
 6. 震动测试先使用默认 40% / 5 秒：验证左低频、右高频、均衡、渐强、脉冲和交替；设备断开、切换页面和退出应用时必须停止。
 
 ## DualSense USB 实机回归
@@ -96,7 +96,7 @@
 | Xbox Overlay | Xbox Overlay、启动、运行时 | 关键按键、D-pad、摇杆、DPI |
 | DualSense HID / 触摸 | 触摸解析、核心、运行时 | USB、蓝牙完整 / 紧凑报告差异 |
 | Motion | 运动自检、运行时 | 静止校准、断连、CRC / 可用性提示 |
-| 漂移 / 范围 | 漂移自检、扳机曲线 | 静止、触碰无效、范围一圈、设备切换 |
+| 漂移 / 范围 | 漂移自检、扳机曲线 | 静止、触碰无效、范围一圈、设备切换、JSON/TXT 实测记录内容 |
 | 震动 | 震动自检、运行时 | 两通道、预设、停止、断开、退出 |
 | UI / 导航 | 启动、运行时、导航 | 页面切换 10 次、窗口 / DPI、资源趋势 |
 
