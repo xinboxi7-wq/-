@@ -1,33 +1,24 @@
 # ControllerLab（手柄实验室）
 
-ControllerLab 是一个原生 Windows WPF 手柄检测与实时可视化工具。它将 Xbox 与 Sony DualSense 手柄统一到同一设备首页中，并提供实时输入反馈、按键测试、摇杆漂移与行程检测，以及面向图像底图的可视化校准工具。
+ControllerLab 是一个 Windows 原生 WPF 手柄检测与实时可视化工具。它在一个设备首页中管理 Xbox / XInput 与 Sony DualSense 输入，并提供实时反馈、按键测试、摇杆健康检测、扳机曲线、体感显示和受保护的震动测试。
 
-> 当前工程面向 Windows x64，使用 .NET Framework 4.8 和原生 WPF；不依赖 WebView、HTML 或浏览器运行时。
+> 当前工程面向 Windows x64 与 .NET Framework 4.8，使用代码式 WPF；不依赖 WebView、HTML、CSS 或浏览器运行时。
 
-## 功能
+## 功能概览
 
-- 自动发现并切换多台在线手柄；设备断开和重新连接会实时更新。
-- Xbox XInput 与 DualSense 原生 HID 输入统一映射到公共控制器状态。
-- Xbox / DualSense 实时可视化：按键、十字键、摇杆、肩键与扳机反馈。
-- Xbox 叠加层使用统一 1536×1024 逻辑舞台；支持区域校准 override，不会覆盖默认资源。
-- 按键测试：记录真实按键是否已通过，并区分演示数据与真实设备输入。
-- 摇杆与扳机检测：静止漂移采样、P95 漂移、建议死区、范围测试、轨迹与扳机历史曲线。
-- DualSense 专属能力：原生 HID 状态通道、触摸板按压、扩展传感器/触点数据的兼容入口（仅在输入报告确实提供数据时显示）。
-- 支持手柄导航：B 返回设备首页，LB/RB 切换页面，View + Menu 进入可用操作。
+- 自动发现和切换多个在线手柄；设备断开、重连时更新列表。
+- Xbox XInput 与 DualSense 原生 HID 统一为公共控制器状态，UI 不直接读取底层报告。
+- Xbox / DualSense 实时按键、D-pad、摇杆、肩键和扳机可视化。
+- 按键测试、摇杆静止漂移 / 范围检测、建议死区和最近 5 秒 LT / RT 历史曲线。
+- DualSense 完整 HID 报告可解析触摸板按压、最多两点触点以及运动数据；没有真实字段时明确显示不可用。
+- Xbox 左右电机和 DualSense 基础双通道震动测试，带持续时间、单任务和自动停止保护。
+- 手柄导航：B 返回设备首页，LB / RB 切换页面，View + Menu 进入可用操作。
 
-## 支持设备
-
-| 设备 | 接入方式 | 当前能力 |
-| --- | --- | --- |
-| Xbox Wireless Controller / 兼容 XInput 手柄 | XInput | 实时输入、可视化、按键测试、摇杆和扳机检测 |
-| Sony DualSense / DualSense Edge | 原生 HID（USB 或蓝牙，取决于系统报告） | 实时输入、专属可视化、按键测试、摇杆和扳机检测 |
-| DUALSHOCK 4 | 原生 HID（兼容路径） | 基础识别与输入状态；完整功能需以实机报告为准 |
-
-电量、触摸坐标和运动传感器取决于实际设备、驱动和连接模式；应用不会用演示数据伪造正式检测结果。
+动态演示和构造自检仅用于 UI / 逻辑验证，不会伪装为真实输入或写入正式检测结果。
 
 ## 截图
 
-### 实时可视化
+### Xbox 实时可视化
 
 ![Xbox 实时可视化](docs/screenshots/xbox-visualizer.png)
 
@@ -35,68 +26,96 @@ ControllerLab 是一个原生 Windows WPF 手柄检测与实时可视化工具�
 
 ![DualSense 实时可视化](docs/screenshots/dualsense-visualizer.png)
 
-### 按键测试
+### 按键、摇杆与扳机检测
 
 ![按键测试](docs/screenshots/input-test.png)
 
-### 摇杆与扳机测试
-
 ![摇杆与扳机测试](docs/screenshots/stick-trigger-test.png)
+
+### 震动测试
+
+![震动测试](docs/screenshots/rumble-test.png)
+
+## 支持设备与能力边界
+
+| 设备 | 接入方式 | 已实现能力 | 重要限制 |
+| --- | --- | --- | --- |
+| Xbox Wireless Controller / 兼容 XInput 手柄 | XInput | 实时输入、可视化、按键 / 摇杆 / 扳机检测、双电机震动 | 电量、连接方式、Guide / Share 等能力受设备和驱动影响。 |
+| Sony DualSense / DualSense Edge | 原生 HID（USB 或蓝牙） | 实时输入、专属可视化、按键 / 摇杆检测、触摸 / 运动解析、基础震动输出 | 触点 / 体感依赖完整报告；USB 与蓝牙震动输出仍待实机验证。 |
+| DUALSHOCK 4 | 原生 HID 兼容路径 | 基础识别与输入状态 | 完整能力尚未承诺，须按实际报告验证。 |
+
+完整矩阵和“已实现 / 已实机验证”的区别见 [docs/DEVICE_SUPPORT.md](docs/DEVICE_SUPPORT.md)。
 
 ## 编译
 
 ### Visual Studio
 
-1. 安装 Visual Studio 2022（或支持 .NET Framework 4.8 的版本）和 **.NET desktop development** 工作负载。
+1. 安装 Visual Studio 2022（或支持 .NET Framework 4.8 的版本）及 **.NET desktop development** 工作负载。
 2. 打开 `ControllerLab.sln`。
 3. 选择 `Debug | x64` 或 `Release | x64`。
 4. 生成并运行 `ControllerLab` 项目。
 
 ### PowerShell
 
-在项目目录执行：
+在项目根目录运行：
 
 ```powershell
-./build.ps1
+.\build.ps1 -OutputName ControllerLab.exe
 ```
 
-该脚本使用本机 .NET Framework WPF 编译工具链。构建输出会生成在 `bin/`，且已被 Git 忽略。
+当前项目没有 `PackageReference` 或 `packages.config`，所以没有独立 Restore 步骤。`build.ps1` 使用本机 .NET Framework 4.8 x64 WPF 编译器；构建输出与调试产物均由 `.gitignore` 忽略。
+
+可执行自检命令和实机回归步骤见 [docs/TESTING.md](docs/TESTING.md)。
 
 ## 使用方法
 
-1. 连接 Xbox 或 DualSense 手柄后启动 ControllerLab。
+1. 连接 Xbox / XInput 或 DualSense 手柄后启动程序。
 2. 在**设备首页**选择目标设备。
-3. 打开**实时可视化**观察输入反馈；动态演示仅用于展示，不能替代真实检测。
-4. 在**按键测试**逐一按下按键；只有真实输入会写入测试会话。
-5. 在**摇杆检测**中先保持摇杆静止，执行漂移检测；然后可进行范围测试。
-6. 如需微调 Xbox 覆盖层，可使用菜单中的校准入口。用户校准数据写入：
-   `%LocalAppData%\ControllerLab\xbox-regions.override.json`，默认资源不会被修改。
+3. 在**实时可视化**观察输入反馈；动态演示不能代替真实检测。
+4. 在**按键检测**逐项按下按键；在**摇杆检测**中先松开摇杆再开始静止采样，并按提示完成范围测试。
+5. 在**体感**页仅使用应用确认可用的真实 DualSense 运动数据。
+6. 在**震动测试**中从默认 `40% / 5 秒` 开始。震动运行期间不能进行静止漂移检测；停止后至少等待 1 秒再采样。
+7. 如需像素级微调 Overlay，使用应用内校准入口。用户 override 写入 LocalAppData，默认资源不会被覆盖。
 
 ## 项目结构
 
 ```text
 ControllerLab/
-├─ Assets/                         # 运行时图片、遮罩和区域配置
-├─ Tools/                          # 离线区域生成/校准辅助工具
-├─ docs/screenshots/               # README 截图
-├─ ControllerLab.sln               # Visual Studio 解决方案
-├─ ControllerLab.csproj            # WPF 项目
-├─ ControllerLab.cs                # 应用与界面组合
-├─ ControllerCore.cs               # 设备、输入与测试核心
-├─ XboxOverlay.cs                  # Xbox 视觉覆盖层
-├─ DualSenseMotion*.cs             # DualSense 运动可视化模块
-└─ build.ps1                       # 本地构建脚本
+├─ Assets/                 # 底图、摇杆帽、Alpha Mask、区域与样式 JSON
+├─ Tools/                  # 开发期离线区域生成与审核工具
+├─ docs/                   # 维护文档和 README 截图
+├─ ControllerLab.cs        # App、MainWindow、Raw Input、Sony HID、可视化组件
+├─ ControllerCore.cs       # 统一状态、设备管理、按键 / 摇杆检测
+├─ ControllerRumble.cs     # 统一震动服务、输出报告与安全控制
+├─ DualSenseMotion*.cs     # 运动解析、融合与可视化
+├─ XboxOverlay.cs          # Xbox Overlay、配置和校准
+├─ ControllerLabTheme.cs   # 代码式 WPF 主题
+├─ ControllerLab.sln       # Visual Studio 解决方案
+├─ ControllerLab.csproj    # WPF 项目
+└─ build.ps1               # 本机构建脚本
 ```
 
-## 校准与资源说明
+## 维护文档
 
-- `Assets/xboxRegions.json`：Xbox 默认区域及遮罩锚点。
-- `Assets/dualSenseRegions.json`：DualSense 默认区域数据。
-- `Assets/LeftTopTriggerMask.png`、`Assets/RightTopTriggerMask.png`：Xbox 顶部左右共用真实图片 Mask。
-- `Tools/GenerateDualSenseRegions` 和 `Tools/GenerateXboxTopRegions` 仅用于开发期离线处理，不作为运行时依赖。
+- [项目当前状态](docs/PROJECT_STATUS.md)
+- [架构与数据流](docs/ARCHITECTURE.md)
+- [设备支持矩阵](docs/DEVICE_SUPPORT.md)
+- [UI 与 Overlay 规则](docs/UI_RULES.md)
+- [设计决策](docs/DECISIONS.md)
+- [测试与回归](docs/TESTING.md)
+- [路线图](docs/ROADMAP.md)
 
-## GitHub Release
+## 当前限制
 
-本仓库默认发布**完整源码**；GitHub 在创建标签 Release 后会自动提供源码 ZIP/TAR 包。若要另行附带 Windows 可执行文件，请在 CI 或单独发布流程中构建，不要提交 `bin/`、`obj/` 或历史测试 EXE。
+- DualSense 触点、运动、电量和输出能力必须按当前 USB / 蓝牙报告判定；不会用鼠标、演示或构造数据伪造结果。
+- Xbox 及第三方兼容手柄的连接名称、电量和震动能力取决于 XInput / 驱动实现。
+- 已校准的 Overlay 是稳定资产。普通 UI 调整不得改动其逻辑坐标、默认区域或真实 PNG Mask。
+- 没有真实设备验证记录的能力在文档中均标为“已实现但待实机验证”。
 
-详细发布内容见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。
+## 路线图
+
+近期方向包括摇杆检测实机可信度、一键健康报告、震动实机验证、DualSense 高级检测和产品化收尾。详细完成标准和风险见 [docs/ROADMAP.md](docs/ROADMAP.md)。
+
+## 许可证
+
+当前仓库**尚未声明开源许可证**。在添加 `LICENSE` 文件前，请勿假设可自由再发布或修改。

@@ -4,6 +4,8 @@
 .vs/
 [Dd]ebug/
 [Rr]elease/
+[Pp]ublish/
+[Tt]est[Rr]esults/
 
 # Local build artifacts and diagnostics
 *.exe
@@ -11,6 +13,8 @@
 *.pdb
 *.cache
 *.tmp
+*.log
+*.bak
 *.user
 *.suo
 *.userosscache
