@@ -2,6 +2,8 @@
 
 > 当前版本：**ControllerLab v1.0.0 Release Candidate 1**（程序集 / 文件版本 1.0.0.0）。软件闭环和发布候选包已完成；真实 Xbox 与 DualSense USB / 蓝牙验收仍是正式 Stable 标签前的阻塞项。
 
+> 2026-09-20：修复并重新部署长期运行闪退版本。旧版 `ControllerLab.exe` 会在 WPF `DispatcherTimer -> SetTimer` 路径耗尽 Window Manager timer handles；当前源码使用受显示刷新率约束的 `CompositionTarget.Rendering`，已从当前源码重新生成 Release EXE。默认 EXE 已更新，旧版保留为同目录 `ControllerLab_legacy_20260920-201913.exe` 回退副本。已完成自动自检和 25 秒运行句柄趋势检查；数小时真实手柄耐久验证仍待完成。
+
 > 2026-07-31：DualSense 高级检测软件实现完成。第 4 页现在分为触摸板、陀螺仪、灯带与电量、自适应扳机；新增双指有界轨迹、固定网格覆盖、五步检测、三轴双向响应诊断、原始/融合姿态切换和哈希设备校准。灯带实际 RGB 未解析，灯带与自适应扳机高级输出明确禁用。新增高级自检及全量回归通过；本环境没有真实 DualSense，USB / 蓝牙物理方向、噪声和高级输出均未实机验证。详见 `DUALSENSE_ADVANCED_NOTES.md`。
 
 > 2026-07-31：专业震动系统软件实现完成。现有 `IControllerRumbleService` 保留，新增统一能力模型、14 个数据化预设、独立 25 Hz 时间线播放器、原生 WPF 曲线编辑、设备哈希配置和感知校准。新增震动构造自检覆盖 12 类安全路径；本环境未连接真实 Xbox 或 DualSense，左右震感及 DualSense USB/蓝牙 HID 写入仍保持“已实现，待实机验证”。

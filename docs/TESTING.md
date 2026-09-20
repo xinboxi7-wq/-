@@ -1,5 +1,12 @@
 # 测试与回归指南
 
+## 长时间运行闪退修复验证（2026-09-20）
+
+- 根因证据：旧版 `ControllerLab.exe` 的 WER / `ControllerLab` 日志反复在 WPF `DispatcherTimer -> SetTimer` 报 Window Manager timer handles 耗尽。
+- 修复部署：从当前源码重新编译 Release 版，主监视循环使用 `CompositionTarget.Rendering`，默认 `ControllerLab.exe` 已替换；旧版保留为 `ControllerLab_legacy_20260920-201913.exe`。
+- 自动验证：启动、运行时、手柄导航、核心、设备、漂移、摇杆、健康检测、DualSense、Overlay、震动和产品体验自检均通过。
+- 短时运行验证：修复版运行 25 秒，进程句柄采样为 700、702、702、702、695，未见持续增长。尚未把这项结果等同于数小时真实手柄耐久验收。
+
 ## v1.0.0 RC 验证记录（2026-07-31）
 
 - Debug：`build.ps1 -Configuration Debug` 成功，生成 `ControllerLab_Debug_1.0.0.exe`。
