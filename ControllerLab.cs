@@ -492,51 +492,7 @@ namespace ControllerLab
         }
     }
 
-    public static class Palette
-    {
-        public static readonly Color Window = Color.FromRgb(10, 17, 23);
-        public static readonly Color Surface = Color.FromRgb(17, 29, 39);
-        public static readonly Color Surface2 = Color.FromRgb(23, 38, 50);
-        public static readonly Color SurfaceHover = Color.FromRgb(29, 47, 60);
-        public static readonly Color SurfaceRaised = Color.FromRgb(35, 56, 70);
-        public static readonly Color Border = Color.FromRgb(81, 101, 114);
-        public static readonly Color Muted = Color.FromRgb(142, 161, 173);
-        public static readonly Color Text = Color.FromRgb(235, 242, 247);
-        public static readonly Color Green = Color.FromRgb(88, 201, 133);
-        public static readonly Color Blue = Color.FromRgb(64, 186, 227);
-        public static readonly Color AccentHover = Color.FromRgb(103, 205, 238);
-        public static readonly Color TopLeftShoulder = Color.FromRgb(45, 218, 191);
-        public static readonly Color TopRightShoulder = Color.FromRgb(151, 112, 245);
-        public static readonly Color Red = Color.FromRgb(239, 107, 98);
-        public static readonly Color Warning = Color.FromRgb(235, 184, 79);
-        public static readonly SolidColorBrush WindowBrush = Freeze(new SolidColorBrush(Window));
-        public static readonly SolidColorBrush SurfaceBrush = Freeze(new SolidColorBrush(Surface));
-        public static readonly SolidColorBrush Surface2Brush = Freeze(new SolidColorBrush(Surface2));
-        public static readonly SolidColorBrush SurfaceHoverBrush = Freeze(new SolidColorBrush(SurfaceHover));
-        public static readonly SolidColorBrush SurfaceRaisedBrush = Freeze(new SolidColorBrush(SurfaceRaised));
-        public static readonly SolidColorBrush BorderBrush = Freeze(new SolidColorBrush(Border));
-        public static readonly SolidColorBrush BorderSubtleBrush = Freeze(new SolidColorBrush(Color.FromArgb(128, Border.R, Border.G, Border.B)));
-        public static readonly SolidColorBrush MutedBrush = Freeze(new SolidColorBrush(Muted));
-        public static readonly SolidColorBrush TextBrush = Freeze(new SolidColorBrush(Text));
-        public static readonly SolidColorBrush GreenBrush = Freeze(new SolidColorBrush(Green));
-        public static readonly SolidColorBrush BlueBrush = Freeze(new SolidColorBrush(Blue));
-        public static readonly SolidColorBrush AccentHoverBrush = Freeze(new SolidColorBrush(AccentHover));
-        public static readonly SolidColorBrush RedBrush = Freeze(new SolidColorBrush(Red));
-        public static readonly SolidColorBrush WarningBrush = Freeze(new SolidColorBrush(Warning));
 
-        private static T Freeze<T>(T value) where T : Freezable
-        {
-            value.Freeze();
-            return value;
-        }
-    }
-
-    public enum ControllerFamily
-    {
-        Auto,
-        Xbox,
-        PlayStation
-    }
 
     public sealed class MainWindow : Window
     {
@@ -5581,43 +5537,6 @@ namespace ControllerLab
         }
     }
 
-    public sealed class ControllerReport
-    {
-        public string GeneratedAt;
-        public string Controller;
-        public bool Connected;
-        public double DisplayHz;
-        public double SamplingHz;
-        public bool DiagnosticReady;
-        public int DiagnosticScore;
-        public string DiagnosticStatus;
-        public string DiagnosticDetail;
-        public int DiagnosticCoverage;
-        public double CenterLeft;
-        public double CenterRight;
-        public string GuidedStatus;
-        public string GuidedStage;
-        public string[] GuidedResults;
-        public double LeftX;
-        public double LeftY;
-        public double RightX;
-        public double RightY;
-        public double LeftTrigger;
-        public double RightTrigger;
-        public double LeftTriggerPeak;
-        public double RightTriggerPeak;
-        public string ButtonsHex;
-        public double LeftDeadzone;
-        public double RightDeadzone;
-        public double OffsetLX;
-        public double OffsetLY;
-        public double OffsetRX;
-        public double OffsetRY;
-        public bool ReducedMotion;
-        public bool HistoryPaused;
-        public double[] LeftTriggerHistory;
-        public double[] RightTriggerHistory;
-    }
 
     public static class ReportExporter
     {
@@ -5830,80 +5749,6 @@ namespace ControllerLab
         }
     }
 
-    public sealed class ControllerSettings
-    {
-        public double OffsetLX;
-        public double OffsetLY;
-        public double OffsetRX;
-        public double OffsetRY;
-        public double LeftDeadzone = 0.08;
-        public double RightDeadzone = 0.08;
-        public int ControllerIndex = -1;
-        public bool ReducedMotion;
-        public string ConnectionMethodOverride = "自动";
-        public string WiredUsbRoute;
-        public string ReceiverUsbRoute;
-        public string ControllerFamily = "Auto";
-        public string Language = "zh-CN";
-        public string StartupPage = "Monitor";
-        public bool AutoConnect = true;
-        public bool RememberWindowPosition = true;
-        public bool AnimationsEnabled = true;
-        public bool HasWindowPlacement;
-        public double WindowLeft;
-        public double WindowTop;
-        public double WindowWidth = 1440;
-        public double WindowHeight = 1024;
-        public int DecimalPlaces = 3;
-        public int TrailLength = 900;
-        public int UiRefreshRate = 60;
-        public bool ShowAdvancedData;
-        public double StationarySampleDuration = 5.0;
-        public double DeadzoneSafetyMarginPercent = 0.5;
-        public bool SaveHistory = true;
-        public double DefaultRumbleStrengthPercent = 40.0;
-        public double DefaultRumbleDurationSeconds = 5.0;
-        public double RumbleSafetyMaximumPercent = 40.0;
-
-        public void Normalize()
-        {
-            if (Language != "zh-CN") Language = "zh-CN";
-            if (StartupPage != "Health" && StartupPage != "Devices") StartupPage = "Monitor";
-            DecimalPlaces = Math.Max(1, Math.Min(3, DecimalPlaces));
-            TrailLength = Math.Max(100, Math.Min(1600, TrailLength));
-            UiRefreshRate = Math.Max(20, Math.Min(60, UiRefreshRate));
-            StationarySampleDuration = Math.Max(3.0, Math.Min(10.0, StationarySampleDuration));
-            DeadzoneSafetyMarginPercent = Math.Max(0.5, Math.Min(5.0, DeadzoneSafetyMarginPercent));
-            DefaultRumbleDurationSeconds = Math.Max(0.5, Math.Min(5.0, DefaultRumbleDurationSeconds));
-            RumbleSafetyMaximumPercent = Math.Max(30.0, Math.Min(70.0, RumbleSafetyMaximumPercent));
-            DefaultRumbleStrengthPercent = Math.Max(0, Math.Min(Math.Min(40.0, RumbleSafetyMaximumPercent), DefaultRumbleStrengthPercent));
-            WindowWidth = Math.Max(1020, Math.Min(3840, WindowWidth));
-            WindowHeight = Math.Max(680, Math.Min(2160, WindowHeight));
-            AnimationsEnabled = !ReducedMotion;
-        }
-
-        public void CopyProductSettingsFrom(ControllerSettings source)
-        {
-            if (source == null) return;
-            Language = source.Language;
-            StartupPage = source.StartupPage;
-            AutoConnect = source.AutoConnect;
-            RememberWindowPosition = source.RememberWindowPosition;
-            AnimationsEnabled = source.AnimationsEnabled;
-            ReducedMotion = source.ReducedMotion;
-            DecimalPlaces = source.DecimalPlaces;
-            TrailLength = source.TrailLength;
-            UiRefreshRate = source.UiRefreshRate;
-            ShowAdvancedData = source.ShowAdvancedData;
-            StationarySampleDuration = source.StationarySampleDuration;
-            DeadzoneSafetyMarginPercent = source.DeadzoneSafetyMarginPercent;
-            SaveHistory = source.SaveHistory;
-            DefaultRumbleStrengthPercent = source.DefaultRumbleStrengthPercent;
-            DefaultRumbleDurationSeconds = source.DefaultRumbleDurationSeconds;
-            RumbleSafetyMaximumPercent = source.RumbleSafetyMaximumPercent;
-            Normalize();
-        }
-    }
 
     public static class SettingsStore
     {
@@ -6220,16 +6065,6 @@ namespace ControllerLab
         }
     }
 
-    public enum GuidedStage
-    {
-        Idle,
-        Center,
-        LeftStick,
-        RightStick,
-        Triggers,
-        Buttons,
-        Complete
-    }
 
     public sealed class GuidedTestEngine
     {
@@ -6594,241 +6429,8 @@ namespace ControllerLab
         }
     }
 
-    public sealed class DualSenseTouchPoint
-    {
-        // The controller-assigned contact id is stable across report ordering. Raw coordinates are
-        // preserved for diagnostics while X/Y remain normalized for every visual consumer.
-        public int Id;
-        public bool IsActive;
-        public double X;
-        public double Y;
-        public byte RawId;
-        public int RawX;
-        public int RawY;
 
-        public DualSenseTouchPoint Copy()
-        {
-            return new DualSenseTouchPoint { Id = Id, IsActive = IsActive, X = X, Y = Y, RawId = RawId, RawX = RawX, RawY = RawY };
-        }
-    }
 
-    public sealed class DualSenseTouchDebugInfo
-    {
-        public string DeviceIdentity;
-        public string ConnectionMethod;
-        public byte ReportId;
-        public int ReportLength;
-        public int TouchOffset;
-        public string Layout;
-        public bool CrcValidated;
-        public bool CoordinatesAvailable;
-        public string AvailabilityMessage;
-        public byte[] RawTouchBytes;
-        public double UpdatesPerSecond;
-    }
-
-    public sealed class InputSnapshot
-    {
-        // Stable identity and timestamp make raw input interchangeable at the UI boundary.
-        public string DeviceId;
-        public DateTime TimestampUtc;
-        public bool Connected;
-        public ControllerFamily Family = ControllerFamily.Xbox;
-        public string DeviceName = "Xbox 无线手柄";
-        public string InputBackend = "XInput";
-        public int Index;
-        public uint Packet;
-        public ushort Buttons;
-        public int LeftTrigger;
-        public int RightTrigger;
-        public int LeftX;
-        public int LeftY;
-        public int RightX;
-        public int RightY;
-        public string Battery = "—";
-        public int BatteryPercent = -1;
-        public bool BatteryTelemetryUnavailable;
-        public string ConnectionMethod = "检测中";
-        public bool ConnectionIsWireless;
-        public bool TouchpadPressed;
-        public bool MicrophoneMuted;
-        public double GyroscopeX;
-        public double GyroscopeY;
-        public double GyroscopeZ;
-        public double AccelerometerX;
-        public double AccelerometerY;
-        public double AccelerometerZ;
-        public MotionSample Motion;
-        public string LightbarState;
-        public string BatteryChargingState;
-        // True DualSense touch data is supplied only by a validated native HID report. XInput and demo
-        // paths intentionally leave these fields empty instead of inventing input.
-        public bool TouchCoordinatesAvailable;
-        public bool HasTouchCoordinates;
-        public DualSenseTouchPoint TouchPoint1;
-        public DualSenseTouchPoint TouchPoint2;
-        public long TouchReportSequence;
-        public DateTime TouchReportUtc;
-        public DualSenseTouchDebugInfo TouchDebug;
-
-        public double LeftNormalizedX { get { return Normalize(LeftX); } }
-        public double LeftNormalizedY { get { return Normalize(LeftY); } }
-        public double RightNormalizedX { get { return Normalize(RightX); } }
-        public double RightNormalizedY { get { return Normalize(RightY); } }
-
-        public InputSnapshot WithOffsets(double lx, double ly, double rx, double ry)
-        {
-            return new InputSnapshot
-            {
-                DeviceId = DeviceId,
-                TimestampUtc = TimestampUtc,
-                Connected = Connected,
-                Family = Family,
-                DeviceName = DeviceName,
-                InputBackend = InputBackend,
-                Index = Index,
-                Packet = Packet,
-                Buttons = Buttons,
-                LeftTrigger = LeftTrigger,
-                RightTrigger = RightTrigger,
-                LeftX = ClampShort(LeftX - lx),
-                LeftY = ClampShort(LeftY - ly),
-                RightX = ClampShort(RightX - rx),
-                RightY = ClampShort(RightY - ry),
-                Battery = Battery,
-                BatteryPercent = BatteryPercent,
-                BatteryTelemetryUnavailable = BatteryTelemetryUnavailable,
-                ConnectionMethod = ConnectionMethod,
-                ConnectionIsWireless = ConnectionIsWireless,
-                TouchpadPressed = TouchpadPressed,
-                MicrophoneMuted = MicrophoneMuted,
-                GyroscopeX = GyroscopeX,
-                GyroscopeY = GyroscopeY,
-                GyroscopeZ = GyroscopeZ,
-                AccelerometerX = AccelerometerX,
-                AccelerometerY = AccelerometerY,
-                AccelerometerZ = AccelerometerZ,
-                Motion = Motion == null ? null : Motion.Copy(),
-                LightbarState = LightbarState,
-                BatteryChargingState = BatteryChargingState,
-                TouchCoordinatesAvailable = TouchCoordinatesAvailable,
-                HasTouchCoordinates = HasTouchCoordinates,
-                TouchPoint1 = TouchPoint1 == null ? null : TouchPoint1.Copy(),
-                TouchPoint2 = TouchPoint2 == null ? null : TouchPoint2.Copy(),
-                TouchReportSequence = TouchReportSequence,
-                TouchReportUtc = TouchReportUtc,
-                TouchDebug = TouchDebug
-            };
-        }
-
-        private static int ClampShort(double value)
-        {
-            return (int)Math.Max(-32768, Math.Min(32767, Math.Round(value)));
-        }
-
-        public static double Normalize(int value)
-        {
-            return Math.Max(-1.0, Math.Min(1.0, value < 0 ? value / 32768.0 : value / 32767.0));
-        }
-
-        public static InputSnapshot CreateDemo()
-        {
-            double t = (DateTime.UtcNow.Ticks % TimeSpan.TicksPerMinute) / (double)TimeSpan.TicksPerSecond;
-            double lx = Math.Cos(t * 0.72 + 2.2) * 0.58;
-            double ly = Math.Sin(t * 0.72 + 2.2) * 0.58;
-            double rx = Math.Cos(t * 0.94 - 0.45) * 0.31;
-            double ry = Math.Sin(t * 0.94 - 0.45) * 0.22;
-            int lt = (int)((Math.Sin(t * 0.43 + 2.1) * 0.5 + 0.5) * 175);
-            int rt = (int)((Math.Sin(t * 0.56) * 0.5 + 0.5) * 205);
-            int phase = ((int)(t * 1.7)) % 18;
-            ushort buttons = phase == 1 ? (ushort)0x1000 :
-                phase == 3 ? (ushort)0x4000 :
-                phase == 5 ? (ushort)0x0200 :
-                phase == 7 ? (ushort)0x0001 :
-                phase == 8 ? (ushort)0x0008 :
-                phase == 9 ? (ushort)0x0002 :
-                phase == 10 ? (ushort)0x0004 :
-                phase == 11 ? (ushort)0x0009 :
-                phase == 12 ? (ushort)0x0006 :
-                phase == 14 ? (ushort)0x0040 :
-                phase == 16 ? (ushort)0x2000 :
-                phase == 17 ? (ushort)0x8000 : (ushort)0;
-            return new InputSnapshot
-            {
-                DeviceId = "demo:xbox:0",
-                TimestampUtc = DateTime.UtcNow,
-                Connected = true,
-                Family = ControllerFamily.Xbox,
-                DeviceName = "Xbox 无线手柄",
-                InputBackend = "动态演示",
-                Index = 0,
-                Packet = (uint)(t * 125),
-                Buttons = buttons,
-                LeftTrigger = lt,
-                RightTrigger = rt,
-                LeftX = (int)(lx * 32767),
-                LeftY = (int)(ly * 32767),
-                RightX = (int)(rx * 32767),
-                RightY = (int)(ry * 32767),
-                Battery = "满电",
-                BatteryPercent = 100,
-                ConnectionMethod = "动态演示",
-                ConnectionIsWireless = true
-            };
-        }
-
-        public static InputSnapshot CreateSonyDemo()
-        {
-            double t = (DateTime.UtcNow.Ticks % TimeSpan.TicksPerMinute) / (double)TimeSpan.TicksPerSecond;
-            double lx = Math.Cos(t * 0.70 + 2.1) * 0.72;
-            double ly = Math.Sin(t * 0.70 + 2.1) * 0.68;
-            double rx = Math.Cos(t * 0.98 - 0.35) * 0.58;
-            double ry = Math.Sin(t * 0.98 - 0.35) * 0.54;
-            int phase = ((int)(t * 1.8)) % 24;
-            ushort buttons = phase == 1 ? (ushort)0x1000 :
-                phase == 2 ? (ushort)0x2000 :
-                phase == 3 ? (ushort)0x4000 :
-                phase == 4 ? (ushort)0x8000 :
-                phase == 5 ? (ushort)0x0001 :
-                phase == 6 ? (ushort)0x0008 :
-                phase == 7 ? (ushort)0x0002 :
-                phase == 8 ? (ushort)0x0004 :
-                phase == 9 ? (ushort)0x0009 :
-                phase == 10 ? (ushort)0x0006 :
-                phase == 11 ? (ushort)0x0040 :
-                phase == 12 ? (ushort)0x0080 :
-                phase == 13 ? (ushort)0x0800 :
-                phase == 14 ? (ushort)0x0400 :
-                phase == 16 ? (ushort)0x0100 :
-                phase == 17 ? (ushort)0x0200 :
-                phase == 18 ? (ushort)0x0020 :
-                phase == 19 ? (ushort)0x0010 : (ushort)0;
-            return new InputSnapshot
-            {
-                DeviceId = "demo:dualsense:0",
-                TimestampUtc = DateTime.UtcNow,
-                Connected = true,
-                Family = ControllerFamily.PlayStation,
-                DeviceName = "DualSense 无线控制器",
-                InputBackend = "动态演示",
-                Index = 0,
-                Packet = (uint)(t * 125),
-                Buttons = buttons,
-                LeftTrigger = (int)((Math.Sin(t * 0.49 + 1.8) * 0.5 + 0.5) * 255),
-                RightTrigger = (int)((Math.Sin(t * 0.61) * 0.5 + 0.5) * 255),
-                LeftX = (int)(lx * 32767),
-                LeftY = (int)(ly * 32767),
-                RightX = (int)(rx * 32767),
-                RightY = (int)(ry * 32767),
-                Battery = "满电",
-                BatteryPercent = 100,
-                ConnectionMethod = "动态演示",
-                ConnectionIsWireless = true,
-                TouchpadPressed = phase == 13,
-                MicrophoneMuted = phase == 15
-            };
-        }
-    }
 
     public sealed class InputManager : IDisposable
     {
@@ -8914,176 +8516,16 @@ namespace ControllerLab
         private static double Distance(Point a, Point b) { double dx = a.X - b.X; double dy = a.Y - b.Y; return Math.Sqrt(dx * dx + dy * dy); }
     }
 
-    public sealed class DualSenseOverlayState
-    {
-        public bool Connected;
-        public bool ReducedMotion;
-        public double DpadUp;
-        public double DpadDown;
-        public double DpadLeft;
-        public double DpadRight;
-        public double Cross;
-        public double Circle;
-        public double Square;
-        public double Triangle;
-        public double L3;
-        public double R3;
-        public double L1;
-        public double R1;
-        public double L2;
-        public double R2;
-        public double Create;
-        public double Options;
-        public double Ps;
-        public double Microphone;
-        public double TouchpadSurface;
-        public double TouchpadButton;
-        public double LeftX;
-        public double LeftY;
-        public double RightX;
-        public double RightY;
-        public bool TouchCoordinatesAvailable;
-        public bool HasTouchCoordinates;
 
-        public double ValueFor(string id)
-        {
-            if (id == "dpad-up") return DpadUp;
-            if (id == "dpad-down") return DpadDown;
-            if (id == "dpad-left") return DpadLeft;
-            if (id == "dpad-right") return DpadRight;
-            if (id == "button-cross") return Cross;
-            if (id == "button-circle") return Circle;
-            if (id == "button-square") return Square;
-            if (id == "button-triangle") return Triangle;
-            if (id == "button-l3") return L3;
-            if (id == "button-r3") return R3;
-            if (id == "button-l1") return L1;
-            if (id == "button-r1") return R1;
-            if (id == "trigger-l2") return L2;
-            if (id == "trigger-r2") return R2;
-            if (id == "button-create") return Create;
-            if (id == "button-options") return Options;
-            if (id == "button-ps") return Ps;
-            if (id == "button-mic") return Microphone;
-            if (id == "touchpad-surface") return TouchpadSurface;
-            if (id == "touchpad-button") return TouchpadButton;
-            return 0;
-        }
-    }
 
-    [DataContract]
-    public sealed class DualSenseRegionsDocument
-    {
-        [DataMember(Name = "schemaVersion")] public int SchemaVersion { get; set; }
-        [DataMember(Name = "sourceImage")] public string SourceImage { get; set; }
-        [DataMember(Name = "imageWidth")] public int ImageWidth { get; set; }
-        [DataMember(Name = "imageHeight")] public int ImageHeight { get; set; }
-        [DataMember(Name = "regions")] public List<DualSenseRegionDefinition> Regions { get; set; }
-        [DataMember(Name = "motionRanges")] public List<DualSenseMotionRangeDefinition> MotionRanges { get; set; }
-        [DataMember(Name = "visualStyleDefaults")] public Dictionary<string, string> VisualStyleDefaults { get; set; }
-        [DataMember(Name = "touchSensor")] public DualSenseTouchSensorDefinition TouchSensor { get; set; }
-    }
 
-    [DataContract]
-    public sealed class DualSenseRegionDefinition
-    {
-        [DataMember(Name = "id")] public string Id { get; set; }
-        [DataMember(Name = "kind")] public string Kind { get; set; }
-        [DataMember(Name = "style")] public string Style { get; set; }
-        [DataMember(Name = "commands")] public List<DualSensePathCommand> Commands { get; set; }
-        [DataMember(Name = "ellipse")] public DualSenseEllipseDefinition Ellipse { get; set; }
-        [DataMember(Name = "sharedGeometryId")] public string SharedGeometryId { get; set; }
-        [DataMember(Name = "motionId")] public string MotionId { get; set; }
-    }
 
-    [DataContract]
-    public sealed class DualSensePathCommand
-    {
-        [DataMember(Name = "op")] public string Op { get; set; }
-        [DataMember(Name = "x")] public double X { get; set; }
-        [DataMember(Name = "y")] public double Y { get; set; }
-        [DataMember(Name = "cx")] public double CX { get; set; }
-        [DataMember(Name = "cy")] public double CY { get; set; }
-        [DataMember(Name = "c1x")] public double C1X { get; set; }
-        [DataMember(Name = "c1y")] public double C1Y { get; set; }
-        [DataMember(Name = "c2x")] public double C2X { get; set; }
-        [DataMember(Name = "c2y")] public double C2Y { get; set; }
-    }
 
-    [DataContract]
-    public sealed class DualSenseEllipseDefinition
-    {
-        [DataMember(Name = "cx")] public double CX { get; set; }
-        [DataMember(Name = "cy")] public double CY { get; set; }
-        [DataMember(Name = "rx")] public double RX { get; set; }
-        [DataMember(Name = "ry")] public double RY { get; set; }
-    }
 
-    [DataContract]
-    public sealed class DualSenseMotionRangeDefinition
-    {
-        [DataMember(Name = "id")] public string Id { get; set; }
-        [DataMember(Name = "accent")] public string Accent { get; set; }
-        [DataMember(Name = "travelX")] public double TravelX { get; set; }
-        [DataMember(Name = "travelY")] public double TravelY { get; set; }
-        [DataMember(Name = "socket")] public DualSenseEllipseDefinition Socket { get; set; }
-        [DataMember(Name = "cap")] public DualSenseEllipseDefinition Cap { get; set; }
-        [DataMember(Name = "pressRegionId")] public string PressRegionId { get; set; }
-    }
 
-    [DataContract]
-    public sealed class DualSenseTouchSensorDefinition
-    {
-        [DataMember(Name = "rawWidth")] public int RawWidth { get; set; }
-        [DataMember(Name = "rawHeight")] public int RawHeight { get; set; }
-        [DataMember(Name = "topLeft")] public DualSenseLogicalPoint TopLeft { get; set; }
-        [DataMember(Name = "topRight")] public DualSenseLogicalPoint TopRight { get; set; }
-        [DataMember(Name = "bottomLeft")] public DualSenseLogicalPoint BottomLeft { get; set; }
-        [DataMember(Name = "bottomRight")] public DualSenseLogicalPoint BottomRight { get; set; }
-        // Legacy rectangular values are retained only to load older user overrides. Runtime mapping
-        // prefers the four calibrated corners above and never uses a second layout transform.
-        [DataMember(Name = "x")] public double X { get; set; }
-        [DataMember(Name = "y")] public double Y { get; set; }
-        [DataMember(Name = "width")] public double Width { get; set; }
-        [DataMember(Name = "height")] public double Height { get; set; }
-    }
 
-    [DataContract]
-    public sealed class DualSenseLogicalPoint
-    {
-        [DataMember(Name = "x")] public double X { get; set; }
-        [DataMember(Name = "y")] public double Y { get; set; }
-    }
 
-    [DataContract]
-    public sealed class DualSenseVisualStylesDocument
-    {
-        [DataMember(Name = "schemaVersion")] public int SchemaVersion { get; set; }
-        [DataMember(Name = "styles")] public List<DualSenseVisualStyleDefinition> Styles { get; set; }
-    }
 
-    [DataContract]
-    public sealed class DualSenseVisualStyleDefinition
-    {
-        [DataMember(Name = "id")] public string Id { get; set; }
-        [DataMember(Name = "fillOpacity")] public double FillOpacity { get; set; }
-        [DataMember(Name = "strokeOpacity")] public double StrokeOpacity { get; set; }
-        [DataMember(Name = "strokePixels")] public double StrokePixels { get; set; }
-        [DataMember(Name = "glowOpacity")] public double GlowOpacity { get; set; }
-        [DataMember(Name = "glowPixels")] public double GlowPixels { get; set; }
-    }
-
-    [DataContract]
-    public sealed class DualSenseRegionsOverride
-    {
-        [DataMember(Name = "schemaVersion")] public int SchemaVersion { get; set; }
-        [DataMember(Name = "sourceImage")] public string SourceImage { get; set; }
-        [DataMember(Name = "imageWidth")] public int ImageWidth { get; set; }
-        [DataMember(Name = "imageHeight")] public int ImageHeight { get; set; }
-        [DataMember(Name = "regions")] public List<DualSenseRegionDefinition> Regions { get; set; }
-        [DataMember(Name = "motionRanges")] public List<DualSenseMotionRangeDefinition> MotionRanges { get; set; }
-        [DataMember(Name = "styles")] public List<DualSenseVisualStyleDefinition> Styles { get; set; }
-    }
 
     public sealed class DualSenseRegionManager
     {
@@ -9705,21 +9147,7 @@ namespace ControllerLab
         }
     }
 
-    public sealed class DualSenseCalibrationHandle
-    {
-        public string Key;
-        public int CommandIndex = -1;
-        public Point Point;
-    }
 
-    public sealed class DualSenseCalibrationSnapshot
-    {
-        public DualSenseRegionsDocument Document;
-        public DualSenseVisualStylesDocument Styles;
-        public List<string> ModifiedRegions;
-        public List<string> ModifiedMotionRanges;
-        public bool StylesModified;
-    }
 
     public sealed class DualSenseCalibrationSurface : FrameworkElement
     {
@@ -10545,12 +9973,6 @@ namespace ControllerLab
         }
     }
 
-    public enum StickPlotTraceMode
-    {
-        Passive,
-        Drift,
-        Range
-    }
 
     public sealed class StickPlot : FrameworkElement
     {
