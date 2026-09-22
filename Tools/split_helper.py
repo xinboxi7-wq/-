@@ -1,7 +1,7 @@
 """split_helper.py — mechanical extraction of top-level types out of ControllerLab.cs
 
-Part of the ControllerLab structural split (Batch 1: Models/ + Theme/).
-See docs/redesign/ControllerLab-结构拆分施工图.md.
+Part of the ControllerLab structural split.
+See docs/redesign/ControllerLab-结构拆分施工图.md
 
 Design rules (deliberately conservative):
   * Only TOP-LEVEL types are touched — declarations indented exactly 4 spaces.
@@ -15,8 +15,9 @@ Design rules (deliberately conservative):
   * DRY RUN by default: pass --apply to actually write files.
 
 Usage:
-    python split_helper.py                     # dry run, prints the plan
-    python split_helper.py --apply             # perform the extraction
+    python split_helper.py --batch 2                 # dry run, prints the plan
+    python split_helper.py --batch 2 --apply         # perform the extraction
+    python split_helper.py --list                    # what each batch contains
 """
 
 import os
@@ -24,22 +25,58 @@ import re
 import sys
 
 SRC = "ControllerLab.cs"
-DRY_RUN = "--apply" not in sys.argv
 
-# Batch 1: pure data / enums -> Models/, Palette -> Theme/
-BATCH1 = {
-    "Models": [
-        "ControllerFamily", "GuidedStage", "StickPlotTraceMode",
-        "ControllerReport", "ControllerSettings", "InputSnapshot",
-        "DualSenseTouchPoint", "DualSenseTouchDebugInfo", "DualSenseOverlayState",
-        "DualSenseRegionsDocument", "DualSenseRegionDefinition", "DualSensePathCommand",
-        "DualSenseEllipseDefinition", "DualSenseMotionRangeDefinition",
-        "DualSenseTouchSensorDefinition", "DualSenseLogicalPoint",
-        "DualSenseVisualStylesDocument", "DualSenseVisualStyleDefinition",
-        "DualSenseRegionsOverride", "DualSenseCalibrationHandle",
-        "DualSenseCalibrationSnapshot",
-    ],
-    "Theme": ["Palette"],
+# ── Batch definitions ────────────────────────────────────────────────────────
+# Folder -> type names, matching docs/redesign/ControllerLab-结构拆分施工图.md §2.2
+BATCHES = {
+    1: {  # pure data / enums  (DONE 2026-09-22)
+        "Models": [
+            "ControllerFamily", "GuidedStage", "StickPlotTraceMode",
+            "ControllerReport", "ControllerSettings", "InputSnapshot",
+            "DualSenseTouchPoint", "DualSenseTouchDebugInfo", "DualSenseOverlayState",
+            "DualSenseRegionsDocument", "DualSenseRegionDefinition", "DualSensePathCommand",
+            "DualSenseEllipseDefinition", "DualSenseMotionRangeDefinition",
+            "DualSenseTouchSensorDefinition", "DualSenseLogicalPoint",
+            "DualSenseVisualStylesDocument", "DualSenseVisualStyleDefinition",
+            "DualSenseRegionsOverride", "DualSenseCalibrationHandle",
+            "DualSenseCalibrationSnapshot",
+        ],
+        "Theme": ["Palette"],
+    },
+    2: {  # self-drawn FrameworkElement controls
+        "Controls": [
+            "ControllerVisual",
+            "StickPlot",
+            "DeadzoneSlider",
+            "DeadzoneSliderAutomationPeer",
+            "TriggerChart",
+            "DualSenseVisual",
+            "DualSenseTouchVisualizer",
+            "DualSenseCalibrationSurface",
+        ],
+    },
+    3: {  # engines and managers
+        "Services": [
+            "ReportExporter",
+            "SettingsStore",
+            "DiagnosticEngine",
+            "GuidedTestEngine",
+            "InputManager",
+            "SonyInputManager",
+            "DualSenseRegionManager",
+        ],
+    },
+    4: {  # windows and views
+        "Views": [
+            "Program",
+            "App",
+            "ControllerVisualizerView",
+            "DeviceCard",
+            "DeviceHomeView",
+            "DualSenseTouchDebugWindow",
+            "DualSenseCalibrationWindow",
+        ],
+    },
 }
 
 TYPE_DECL = re.compile(
@@ -134,36 +171,63 @@ def find_types(lines):
     return results
 
 
-def header(dest, name, origin_start, origin_end):
+def header(batch, name, origin_start, origin_end):
     return (
         "// " + name + "\n"
         "//\n"
         "// Extracted verbatim from ControllerLab.cs (lines {0}-{1}) on 2026-09-22\n"
-        "// as part of the ControllerLab structural split. No logic was changed.\n"
+        "// as part of the ControllerLab structural split (batch {2}).\n"
+        "// No logic was changed.\n"
         "// See docs/redesign/ControllerLab-结构拆分施工图.md\n"
-    ).format(origin_start, origin_end)
+    ).format(origin_start, origin_end, batch)
+
+
+def parse_args():
+    batch = 1
+    apply = False
+    for i, a in enumerate(sys.argv[1:], 1):
+        if a == "--apply":
+            apply = True
+        elif a == "--batch" and i + 1 < len(sys.argv):
+            batch = int(sys.argv[i + 1])
+        elif a.startswith("--batch="):
+            batch = int(a.split("=", 1)[1])
+    return batch, apply
 
 
 def main():
+    if "--list" in sys.argv:
+        for b in sorted(BATCHES):
+            total = sum(len(v) for v in BATCHES[b].values())
+            print("batch {0}: {1} types".format(b, total))
+            for folder, names in BATCHES[b].items():
+                print("   {0}/  {1}".format(folder, ", ".join(names)))
+        return 0
+
+    batch, apply = parse_args()
+    if batch not in BATCHES:
+        print("unknown batch {0}; known: {1}".format(batch, sorted(BATCHES)))
+        return 2
+
     with open(SRC, encoding="utf-8") as fh:
         lines = fh.read().split("\n")
 
     types = find_types(lines)
     by_name = {n: (s, e) for n, s, e in types}
-    print("found {0} top-level types in {1} ({2} lines)".format(len(types), SRC, len(lines)))
+    print("batch {0} | found {1} top-level types in {2} ({3} lines)".format(
+        batch, len(types), SRC, len(lines)))
 
     usings = [l for l in lines if l.startswith("using ")]
     namespace = next(l for l in lines if l.startswith("namespace ")).strip()
     print("usings: {0} | namespace: {1}".format(len(usings), namespace))
 
     plan = []
-    for folder, names in BATCH1.items():
+    for folder, names in BATCHES[batch].items():
         for name in names:
             if name not in by_name:
                 print("  !! MISSING: {0} (not found as a top-level type)".format(name))
-                continue
+                return 3
             s, e = by_name[name]
-            # pull in directly-preceding attributes / doc comments / line comments
             top = s
             while top - 1 > 0 and re.match(r"^    (\s*\[|///|//)", lines[top - 1]) is not None:
                 top -= 1
@@ -173,10 +237,10 @@ def main():
 
     print("\nplan ({0} types):".format(len(plan)))
     for folder, name, top, e in plan:
-        print("  {0:<10} {1:<32} lines {2:>6}-{3:<6} ({4} lines)".format(
+        print("  {0:<10} {1:<34} lines {2:>6}-{3:<6} ({4} lines)".format(
             folder + "/", name + ".cs", top + 1, e + 1, e - top + 1))
 
-    if DRY_RUN:
+    if not apply:
         print("\nDRY RUN — nothing written. Re-run with --apply to perform the split.")
         return 0
 
@@ -185,7 +249,7 @@ def main():
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, name + ".cs")
         content = (
-            header(folder, name, top + 1, e + 1)
+            header(batch, name, top + 1, e + 1)
             + "\n".join(usings)
             + "\n\n"
             + namespace + "\n{\n"
