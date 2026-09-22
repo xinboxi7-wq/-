@@ -62,11 +62,30 @@
 
 ---
 
-## 3. 五批拆分顺序（风险由零到高，每批一次提交）
+## 3. 拆分顺序（风险由零到高，每批一次提交）
 
-### Batch 1 · 数据与主题（🟢 零风险）
-`Models/` 21 个纯数据类/枚举 + `Theme/Palette.cs`。
-**无行为、无事件、无 WPF 依赖** → 拆错也只会编译失败，绝不会改坏运行时行为。
+### Batch 0 · 构建脚本改造（🟢 **已完成 2026-09-22**）
+
+**原施工图漏掉的前置条件**：`build.ps1` 用的是**硬编码的 20 个根目录文件清单**（第 40–59 行），不递归、不扫目录。**不先改它，任何放进子目录的新文件都编译不到**，拆分第一步就会静默失败。
+
+改动：清单 → 递归 glob + 排除 `bin/ obj/ release/ docs/ Assets/ audit*/`。
+验证：改前改后编译的是**同一批 20 个文件**（根目录 `.cs` 恰好等于原清单，子目录里 0 个 `.cs`）；产物 4,302,336 B vs 基线 4,302,848 B（差异仅来自时间戳）；`--startup-selftest` 通过。
+**踩坑（会挂掉所有构建）**：`Sort-Object -ExpandProperty` 在 Windows PowerShell 里**不存在**（PS 7 才有）→ 改用 `Sort-Object FullName | ForEach-Object { $_.FullName }`。
+
+### Batch 1 · 数据与主题（🟢 **已完成 2026-09-22**）
+
+提取 `Models/` 21 个纯数据类/枚举 + `Theme/Palette.cs`。
+
+| 指标 | 结果 |
+| --- | --- |
+| `ControllerLab.cs` | 11,037 → **10,458 行**（−579） |
+| 新建文件 | 22 个（21 Models + 1 Theme） |
+| 编译 | ✅ 通过 |
+| 自检 | ✅ `--startup-selftest` / `--runtime-selftest` / `--controller-core-selftest` / `--ds5-overlay-selftest` / `--xbox-overlay-selftest` 全过（退出码 0） |
+| 提交 | `refactor(structure): extract models and theme palette from ControllerLab.cs` |
+
+**工具**：`Tools/split_helper.py` —— 机械提取器（默认 dry-run，`--apply` 才写盘）。Batch 2–5 复用它，只需扩充批次映射表。
+
 
 ### Batch 2 · 自绘控件（🟢 低风险）
 `Controls/` 8 个 `FrameworkElement` 子类。
@@ -148,16 +167,36 @@ grep -rn "DispatcherTimer" --include=*.cs .
 
 ---
 
-## 6. 完成判据
+## 6. 完成判据与实际结果（2026-09-22 收工）
 
-| 指标 | 拆分前 | 目标 |
+| 指标 | 拆分前 | 目标 | **实际** |
+| --- | --- | --- | --- |
+| `ControllerLab.cs` 行数 | 11,037 | 0（文件消失） | ✅ **已删除** |
+| 拆分产出文件 | — | — | **53 个**（Models 21 / Theme 1 / Controls 8 / Services 7 / Views 7 + MainWindow 9 份） |
+| MainWindow 单类行数 | 5,042 | ≤ 2,000 | ✅ 最大 **1,805**（`Views/MainWindow.Shell.cs`） |
+| 编译 | ✅ | 全程保持 | ✅ 每批都过 |
+| 全部自检 | — | 全程保持 | ✅ **11 项，每批全绿（含最后一批）** |
+| 代码完整性 | — | 只搬不改 | ✅ 逐行多重集审计：**零行真实代码丢失**，唯一变更是 `class MainWindow` → `partial class MainWindow` |
+| 工作树 | 干净 | 干净 | ✅ 干净 |
+
+### ⚠️ 未尽事项：仍有 1 个文件超出 2,000 行目标
+
+| 文件 | 行数 | 说明 |
 | --- | --- | --- |
-| `ControllerLab.cs` 行数 | 11,036 | **0（该文件消失）** |
-| 单文件最大行数 | 5,042（MainWindow） | **≤ 2,000** |
-| 单次任务上下文 | 需吞 11,036 行 | **≤ 5 万 token** |
-| 编译 | ✅ | ✅ 全程保持 |
-| 全部自检 | ✅ | ✅ 全程保持 |
-| 工作树 | 干净 | 干净 |
+| `XboxOverlay.cs` | **3,193** | **不在本次拆分范围**（本次只拆 `ControllerLab.cs`）。需要 **Batch 6** 单独处理 |
+| `ControllerCore.cs` | 1,840 | 达标 |
+| `ControllerHealthCheckViewModel.cs` | 1,184 | 达标 |
+
+### 执行方式（实际）
+
+| 批次 | 执行者 | 结果 |
+| --- | --- | --- |
+| Batch 0 构建脚本 | 小马 | `build.ps1` 硬编码清单 → 递归 glob |
+| Batch 1–4 | 小马（`Tools/split_helper.py`） | 44 个类型 → `Models/ Theme/ Controls/ Services/ Views/` |
+| **Batch 5 MainWindow** | **Codex（gpt-5.6-luna, effort=medium）** | 5,119 行 → 9 个 partial 文件 |
+
+**Codex 本次消耗**：周额度 **+1%**（63%→64%），1.82M token（其中 1.73M 命中缓存）。结论：**拆分本身极便宜，真正烧额度的是"在臃肿仓库里反复全量读代码"——而那正是本次拆分消灭掉的东西。**
+
 
 ---
 
