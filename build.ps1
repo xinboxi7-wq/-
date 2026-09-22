@@ -37,26 +37,24 @@ $compilerArgs = @(
     "/reference:$(Join-Path $framework 'System.Core.dll')"
     "/reference:$(Join-Path $framework 'System.Runtime.Serialization.dll')"
     "/reference:$(Join-Path $framework 'System.Xml.dll')"
-    (Join-Path $project 'ControllerCore.cs')
-    (Join-Path $project 'BuildInfo.cs')
-    (Join-Path $project 'StatusLabels.cs')
-    (Join-Path $project 'ControllerRumble.cs')
-    (Join-Path $project 'RumbleProfessional.cs')
-    (Join-Path $project 'RumbleStudioPage.cs')
-    (Join-Path $project 'JoystickAnalyzer.cs')
-    (Join-Path $project 'JoystickTestViewModel.cs')
-    (Join-Path $project 'JoystickTestPage.cs')
-    (Join-Path $project 'ControllerHealthReport.cs')
-    (Join-Path $project 'ControllerHealthCheckViewModel.cs')
-    (Join-Path $project 'ControllerHealthCheckPage.cs')
-    (Join-Path $project 'DualSenseMotion.cs')
-    (Join-Path $project 'DualSenseMotionVisual.cs')
-    (Join-Path $project 'DualSenseAdvanced.cs')
-    (Join-Path $project 'DualSenseAdvancedPage.cs')
-    (Join-Path $project 'XboxOverlay.cs')
-    (Join-Path $project 'ControllerLabTheme.cs')
-    (Join-Path $project 'ProductExperience.cs')
-    (Join-Path $project 'ControllerLab.cs')
+    # Source set: every .cs in the project, recursively, minus build output,
+    # published packages, docs and audit snapshots.
+    #
+    # Before 2026-09-22 this was a hard-coded list of the 20 root-level files.
+    # That list is what kept every type in the project root: the structural split
+    # (see docs/redesign/ControllerLab-结构拆分施工图.md) needs sources under
+    # Models/ Controls/ Services/ Views/, and a hard-coded list cannot see them.
+    # The glob below is behaviour-identical for the flat layout: the 20 listed
+    # files were exactly the 20 root-level .cs files, and there are no .cs files
+    # in any subdirectory, so nothing new is picked up today.
+    (Get-ChildItem -LiteralPath $project -Filter '*.cs' -Recurse -File -ErrorAction Stop |
+        Where-Object {
+            $rel = $_.FullName.Substring($project.Length).TrimStart([char]'\', [char]'/')
+            ($rel -notmatch '^(bin|obj|release|docs|Assets)([\\/]|$)') -and
+            ($rel -notmatch '^audit(-[^\\/]+)?([\\/]|$)')
+        } |
+        Sort-Object FullName |
+        ForEach-Object { $_.FullName })
 )
 & (Join-Path $framework 'csc.exe') $compilerArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
