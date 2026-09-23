@@ -1,0 +1,156 @@
+# 测试与回归指南
+
+## 长时间运行闪退修复验证（2026-09-20）
+
+- 根因证据：旧版 `ControllerLab.exe` 的 WER / `ControllerLab` 日志反复在 WPF `DispatcherTimer -> SetTimer` 报 Window Manager timer handles 耗尽。
+- 修复部署：从当前源码重新编译 Release 版，主监视循环使用 `CompositionTarget.Rendering`，默认 `ControllerLab.exe` 已替换；旧版保留为 `ControllerLab_legacy_20260920-201913.exe`。
+- 自动验证：启动、运行时、手柄导航、核心、设备、漂移、摇杆、健康检测、DualSense、Overlay、震动和产品体验自检均通过。
+- 短时运行验证：修复版运行 25 秒，进程句柄采样为 700、702、702、702、695，未见持续增长。尚未把这项结果等同于数小时真实手柄耐久验收。
+
+## v1.0.0 RC 验证记录（2026-07-31）
+
+- Debug：`build.ps1 -Configuration Debug` 成功，生成 `ControllerLab_Debug_1.0.0.exe`。
+- Release：`build.ps1 -Configuration Release` 成功，生成 `ControllerLab_Release_1.0.0.exe`。
+- Visual Studio MSBuild Clean：成功；Build 受本机未安装 .NET Framework 4.8 Developer Pack 阻断，已使用项目内置等价 x64 csc Debug / Release 流程完成编译。
+- 自动自检：18 项命令行自检全部通过，另含产品页面启动 / 关闭烟雾测试。
+- 发布目录启动：`release/ControllerLab-v1.0.0-win-x64/ControllerLab.exe` 的 startup self-test、无设备启动、关闭退出均通过。
+- 发布包：`ControllerLab-v1.0.0-win-x64.zip`，7,275,036 bytes；EXE 4,302,848 bytes。
+- 发布包 SHA256：`B1BBDA035A31D6F158AE6582FF0E8684413196DA22BF07D92C8FA19B2AE96360`。
+- 真实硬件：本环境未连接受支持手柄，Xbox / DualSense USB / 蓝牙输入、震动、触摸、体感和断开重连列为人工实机测试。
+
+新增摇杆专业分析自检：
+
+```powershell
+.\ControllerLab_Test.exe --joystick-analyzer-selftest
+```
+
+该命令固定验证 10 类构造数据：低漂移中心、右漂、噪声标准差、完整圆、缺失象限、方形限制、回中过冲、多次反弹、死区不得低于最大漂移，以及空样本安全返回。
+
+新增完整健康检测自检：
+
+```powershell
+.\ControllerLab_Test.exe --health-check-selftest
+```
+
+该命令验证扳机行程分析、Xbox 动态步骤不包含 DualSense 专属项目、跳过项不计分且报告为 Incomplete、严重异常评分上限、断开 / 原设备重连、JSON / Markdown 保存读取导出删除。
+
+## 构建环境
+
+- **目标框架：** .NET Framework 4.8。
+- **架构：** x64。
+- **UI：** 原生 WPF。
+- **编译入口：** `build.ps1`，调用 `C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe` 及 WPF 程序集。
+- **运行环境：** Windows x64，需具备 .NET Framework 4.8。工程未在源码中声明更精确的最低 Windows 版本。
+
+## Restore、Build 与本地测试
+
+当前 `ControllerLab.csproj` 没有 `PackageReference`，仓库也没有 `packages.config`；因此当前没有需要执行的包还原步骤。不要为了形式运行不适用的 `dotnet restore`。若未来引入 NuGet 依赖，必须同时记录可执行的 restore 命令。
+
+```powershell
+# 在项目根目录构建一个隔离测试文件，避免覆盖正在运行的版本
+.\build.ps1 -OutputName ControllerLab_Test.exe
+
+# 基础构造、运行时和导航
+.\ControllerLab_Test.exe --startup-selftest
+.\ControllerLab_Test.exe --runtime-selftest
+.\ControllerLab_Test.exe --controller-navigation-selftest
+
+# 公共状态、设备和检测
+.\ControllerLab_Test.exe --controller-core-selftest
+.\ControllerLab_Test.exe --device-manager-selftest
+.\ControllerLab_Test.exe --stick-drift-selftest
+.\ControllerLab_Test.exe --joystick-analyzer-selftest
+.\ControllerLab_Test.exe --health-check-selftest
+.\ControllerLab_Test.exe --trigger-chart-selftest
+
+# DualSense 与可视化
+.\ControllerLab_Test.exe --ds5-touch-parser-selftest
+.\ControllerLab_Test.exe --ds5-motion-selftest
+.\ControllerLab_Test.exe --dualsense-advanced-selftest
+.\ControllerLab_Test.exe --ds5-overlay-selftest
+.\ControllerLab_Test.exe --xbox-overlay-selftest
+
+# 震动输出、时间线、配置与安全逻辑
+.\ControllerLab_Test.exe --rumble-selftest
+
+# UI 产品设置、报告比较、日志轮转与逻辑 DPI 布局
+.\ControllerLab_Test.exe --product-experience-selftest
+
+# 生成六张离线 WPF 渲染审计图
+.\ControllerLab_Test.exe --product-ui-render-audit
+```
+
+当前没有 Publish Profile 或 `dotnet publish` 命令。发布使用 `build.ps1 -Configuration Release` 后的 EXE 和明确的发布目录清单；发布包不包含 PDB、bin/、obj/、源码、测试文件或本地设置。由于目标是 .NET Framework 4.8，发布包依赖 Windows 已安装的 .NET Framework 4.8，不是 self-contained .NET 包。
+
+## 自动自检范围
+
+| 命令 | 覆盖范围 | 不覆盖范围 |
+| --- | --- | --- |
+| `--startup-selftest` | WPF 窗口构造 | 真实设备输入 |
+| `--runtime-selftest` | 窗口短时显示 / 关闭 | 长时间资源、真实设备 |
+| `--controller-navigation-selftest` | 手柄导航逻辑 | 真实按键硬件 |
+| `--controller-core-selftest` | 状态适配与报告模型 | 真实 HID / XInput |
+| `--stick-drift-selftest` | 构造漂移、范围、阈值、连续检测和临时目录中的实测记录 JSON/TXT 写入 | 真实摇杆噪声、驱动归一化差异 |
+| `--joystick-analyzer-selftest` | 专业摇杆静止、圆周、回中和死区推荐算法 | 真实摇杆机械特性 |
+| `--health-check-selftest` | 动态步骤、跳过 / 不支持语义、评分上限、断连恢复、报告存储与导出 | 用户主观震感、真实触点 / 体感和实际硬件行程 |
+| `--device-manager-selftest` | 多设备注册 / 移除逻辑 | Windows 热插拔 |
+| `--ds5-touch-parser-selftest` | USB / BT 报告布局构造数据 | 真实 DualSense 报告 |
+| `--ds5-motion-selftest` | 运动解析、CRC、融合边界 | 真实传感器精度 |
+| `--dualsense-advanced-selftest` | 双指/结束/按压、固定网格覆盖、正负轴响应、中断/跳变、页面离开取消、保存校准、断开释放、损坏配置和高级输出关闭边界 | 真实触摸方向、物理轴方向、实际传感器噪声、灯带/扳机输出 |
+| `--ds5-overlay-selftest` / `--xbox-overlay-selftest` | 逻辑舞台与区域边界 | 实机照片的肉眼对齐 |
+| `--trigger-chart-selftest` | 缓冲区与曲线逻辑 | 真实扳机噪声 |
+| `--rumble-selftest` | 0% 停止、左右隔离、25 Hz 时间线插值、完成/取消/页面/异常归零、快速替换、预设持久化、损坏配置和不支持设备门控，以及 USB/BT 报告 | 真实震感 / HID 写入兼容性 |
+| `--product-experience-selftest` | 设置范围、报告比较、日志轮转和 1080p/1440p/1600p 逻辑 DPI 矩阵 | 真实屏幕的 ClearType、跨显示器与触摸操作 |
+| `--product-ui-render-audit` | 实时监视、摇杆、震动、完整检测、设置、历史报告在 125%/150% 等效尺寸的原生 WPF 离线渲染 | 真实显示器色彩与系统主题差异 |
+
+## Xbox 实机回归
+
+1. 使用有线、蓝牙或接收器（适用时）连接 Xbox / XInput 手柄，确认设备首页名称、设备 ID、输入来源和连接方式。
+2. 在实时页逐项按 A/B/X/Y、D-pad 四方向与斜向、View、Menu、Guide、LB/RB、L3/R3；观察局部高亮无明显偏移。
+3. 推动左右摇杆的中心、四向与四个斜向极限；确认摇杆帽位于前景、光环固定、回中重合。
+4. LT / RT 从 0% 缓慢到 100%，确认历史曲线连续且 LT 左→右、RT 右→左的视觉反馈正确。
+5. 完成按键测试和摇杆静止 / 范围测试；测试中故意触碰摇杆，确认结果被标记为无效而非严重漂移。完成后点击“保存实测记录”，确认 `%LocalAppData%\ControllerLab\stick-test-records\` 中生成同一记录 ID 的 `.json` 和 UTF-8 `.txt`，并在测试记录中注明文件名。
+6. 震动测试先使用默认 40% / 5 秒：验证左右隔离、14 个预设、时间线预览/暂停/紧急停止、自定义保存删除、四阶段校准；设备断开、切换页面和退出应用时必须停止。
+7. 进入“完整检测”，从开始页走到报告页；验证上一步、下一步、重测、跳过、取消，跳过项显示未检测，历史报告可重新读取并正确导出 JSON / Markdown。
+
+## DualSense USB 实机回归
+
+1. 以 USB 连接；记录设备名称、报告 ID、报告长度和连接方式。
+2. 检查按键、摇杆、L2/R2、触摸板按压、麦克风按钮和电量（若报告可用）。
+3. 在触摸板测试单指四角、滑动、双指、按压组合；确认只有报告提供真实坐标时才显示触点。
+4. 在 DS 高级页完成五步触摸检测；确认双指独立颜色、松手无残留、24×12 覆盖图不因原地停留虚增。
+5. 静止校准、保存设备校准、重新居中，然后依次左右旋转、前后倾斜和侧向倾斜；确认三轴正负响应、原始/融合姿态切换和 Yaw 漂移提示。物理左倾/前倾的显示方向必须记录实机结果。
+6. 确认灯带与自适应扳机显示“待验证/未开放”，不能触发输出。
+7. 使用默认安全震动设置，确认 USB 输出只使用 USB 报告，并验证页面离开 / 断开 / 退出停止。
+8. 运行完整检测，确认只有报告中真实可用的触摸坐标和 Motion 数据才生成对应步骤；缺少解析数据时必须显示当前版本暂不支持检测。
+
+## DualSense 蓝牙实机回归
+
+1. 以蓝牙连接，记录完整 `0x31` 或紧凑兼容 `0x01` 报告布局。
+2. 基础输入必须工作；紧凑报告应明确显示触摸坐标和运动不可用，不得伪造数据。
+3. 对完整报告重复触点、体感和 CRC 异常检查。
+4. 震动必须使用蓝牙输出 `0x31` 与 CRC，不得发送 USB 输出格式。
+
+## Overlay 对齐与 DPI 检查
+
+对 Xbox 和 DualSense 分别检查 100%、125%、150% DPI，及至少三种窗口尺寸：
+
+- 底图完整显示且比例不变。
+- 关闭 Glow、透明 Fill、1px 描边时，已校准区域与实体边缘贴合。
+- 开启正式光效后，Glow 不越过无关外壳。
+- 校准只写入相应 LocalAppData override；默认 JSON 保持不变。
+
+## 回归测试清单
+
+| 改动区域 | 必跑自动测试 | 必做人工 / 实机检查 |
+| --- | --- | --- |
+| 输入、设备管理 | 核心、设备、启动、运行时 | 断开重连、多设备切换、无设备状态 |
+| Xbox Overlay | Xbox Overlay、启动、运行时 | 关键按键、D-pad、摇杆、DPI |
+| DualSense HID / 触摸 | 触摸解析、核心、运行时 | USB、蓝牙完整 / 紧凑报告差异 |
+| Motion / DualSense 高级页 | 运动、高级、触摸解析、运行时 | 触摸五步、静止校准、三轴双向、断连、CRC、页面释放、USB/BT 差异 |
+| 漂移 / 范围 | 漂移自检、扳机曲线 | 静止、触碰无效、范围一圈、设备切换、JSON/TXT 实测记录内容 |
+| 震动 | 震动自检、运行时 | 两通道、预设、停止、断开、退出 |
+| 完整检测 / 报告 | 健康检测自检、摇杆分析、核心、震动、运行时 | 全向导、跳过、不支持、设备断连重连、历史与导出 |
+| UI / 导航 | 启动、运行时、导航 | 页面切换 10 次、窗口 / DPI、资源趋势 |
+
+每次实机验证应记录设备型号、连接模式、测试日期、输入来源、结果和已知异常；没有记录时，不得更新为 `Supported and verified`。

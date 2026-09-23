@@ -1,15 +1,19 @@
 param(
-    [string]$OutputName = 'ControllerLab.exe'
+    [string]$OutputName = 'ControllerLab.exe',
+    [ValidateSet('Debug', 'Release')]
+    [string]$Configuration = 'Release'
 )
 $ErrorActionPreference = 'Stop'
 $framework = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319'
 $wpf = Join-Path $framework 'WPF'
 $project = Split-Path -Parent $MyInvocation.MyCommand.Path
+$isDebug = $Configuration -eq 'Debug'
 $compilerArgs = @(
     '/nologo'
     '/target:winexe'
     '/platform:x64'
-    '/optimize+'
+    $(if ($isDebug) { '/optimize-' } else { '/optimize+' })
+    $(if ($isDebug) { '/debug:full' } else { '/debug:pdbonly' })
     '/codepage:65001'
     "/win32manifest:$(Join-Path $project 'app.manifest')"
     "/out:$(Join-Path $project $OutputName)"
@@ -32,13 +36,26 @@ $compilerArgs = @(
     "/reference:$(Join-Path $framework 'System.dll')"
     "/reference:$(Join-Path $framework 'System.Core.dll')"
     "/reference:$(Join-Path $framework 'System.Runtime.Serialization.dll')"
-    (Join-Path $project 'ControllerCore.cs')
-    (Join-Path $project 'DualSenseMotion.cs')
-    (Join-Path $project 'DualSenseMotionVisual.cs')
-    (Join-Path $project 'XboxOverlay.cs')
-    (Join-Path $project 'ControllerLabTheme.cs')
-    (Join-Path $project 'ControllerLab.cs')
+    "/reference:$(Join-Path $framework 'System.Xml.dll')"
+    # Source set: every .cs in the project, recursively, minus build output,
+    # published packages, docs and audit snapshots.
+    #
+    # Before 2026-09-22 this was a hard-coded list of the 20 root-level files.
+    # That list is what kept every type in the project root: the structural split
+    # (see docs/redesign/ControllerLab-结构拆分施工图.md) needs sources under
+    # Models/ Controls/ Services/ Views/, and a hard-coded list cannot see them.
+    # The glob below is behaviour-identical for the flat layout: the 20 listed
+    # files were exactly the 20 root-level .cs files, and there are no .cs files
+    # in any subdirectory, so nothing new is picked up today.
+    (Get-ChildItem -LiteralPath $project -Filter '*.cs' -Recurse -File -ErrorAction Stop |
+        Where-Object {
+            $rel = $_.FullName.Substring($project.Length).TrimStart([char]'\', [char]'/')
+            ($rel -notmatch '^(bin|obj|release|docs|Assets)([\\/]|$)') -and
+            ($rel -notmatch '^audit(-[^\\/]+)?([\\/]|$)')
+        } |
+        Sort-Object FullName |
+        ForEach-Object { $_.FullName })
 )
 & (Join-Path $framework 'csc.exe') $compilerArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host "Built: $(Join-Path $project $OutputName)"
+Write-Host "Built: $(Join-Path $project $OutputName) [$Configuration]"

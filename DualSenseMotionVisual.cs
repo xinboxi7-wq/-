@@ -20,6 +20,9 @@ namespace ControllerLab
         private readonly Brush mutedBrush = new SolidColorBrush(Color.FromArgb(130, Palette.Muted.R, Palette.Muted.G, Palette.Muted.B));
         private MotionViewState state;
         private bool smoothingEnabled = true;
+        private bool useRawPose;
+        private double sensitivity = 1.0;
+        private double smoothing = 0.72;
         private bool hasDisplayPose;
         private double pitch;
         private double roll;
@@ -44,10 +47,34 @@ namespace ControllerLab
             }
         }
 
+        public bool UseRawPose
+        {
+            get { return useRawPose; }
+            set
+            {
+                if (useRawPose == value) return;
+                useRawPose = value;
+                hasDisplayPose = false;
+            }
+        }
+
+        public double Sensitivity
+        {
+            get { return sensitivity; }
+            set { sensitivity = Clamp(value, 0.5, 2.0); }
+        }
+
+        public double Smoothing
+        {
+            get { return smoothing; }
+            set { smoothing = Clamp(value, 0, 1); }
+        }
+
         public void SetState(MotionViewState value)
         {
             state = value;
-            if (value == null || !value.IsAvailable || value.Pose == null || !value.Pose.HasPose)
+            MotionFusionSnapshot pose = value == null ? null : (useRawPose && value.RawPose != null ? value.RawPose : value.Pose);
+            if (value == null || !value.IsAvailable || pose == null || !pose.HasPose)
             {
                 hasDisplayPose = false;
                 InvalidateVisual();
@@ -55,16 +82,17 @@ namespace ControllerLab
             }
             if (!hasDisplayPose || !smoothingEnabled)
             {
-                pitch = value.Pose.Pitch;
-                roll = value.Pose.Roll;
-                yaw = value.Pose.Yaw;
+                pitch = pose.Pitch * sensitivity;
+                roll = pose.Roll * sensitivity;
+                yaw = pose.Yaw * sensitivity;
                 hasDisplayPose = true;
             }
             else
             {
-                pitch = SmoothAngle(pitch, value.Pose.Pitch, 0.28);
-                roll = SmoothAngle(roll, value.Pose.Roll, 0.28);
-                yaw = SmoothAngle(yaw, value.Pose.Yaw, 0.24);
+                double amount = 0.08 + (1.0 - smoothing) * 0.72;
+                pitch = SmoothAngle(pitch, pose.Pitch * sensitivity, amount);
+                roll = SmoothAngle(roll, pose.Roll * sensitivity, amount);
+                yaw = SmoothAngle(yaw, pose.Yaw * sensitivity, amount * 0.86);
             }
             InvalidateVisual();
         }

@@ -7,6 +7,10 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>ControllerLab</RootNamespace>
     <AssemblyName>ControllerLab</AssemblyName>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <TargetFrameworkProfile />
     <StartupObject>ControllerLab.Program</StartupObject>
@@ -32,6 +36,7 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Xml" />
     <Reference Include="System.Xaml" />
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
@@ -41,10 +46,24 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ControllerCore.cs" />
+    <Compile Include="BuildInfo.cs" />
+    <Compile Include="StatusLabels.cs" />
+    <Compile Include="ControllerRumble.cs" />
+    <Compile Include="RumbleProfessional.cs" />
+    <Compile Include="RumbleStudioPage.cs" />
+    <Compile Include="JoystickAnalyzer.cs" />
+    <Compile Include="JoystickTestViewModel.cs" />
+    <Compile Include="JoystickTestPage.cs" />
+    <Compile Include="ControllerHealthReport.cs" />
+    <Compile Include="ControllerHealthCheckViewModel.cs" />
+    <Compile Include="ControllerHealthCheckPage.cs" />
     <Compile Include="DualSenseMotion.cs" />
     <Compile Include="DualSenseMotionVisual.cs" />
+    <Compile Include="DualSenseAdvanced.cs" />
+    <Compile Include="DualSenseAdvancedPage.cs" />
     <Compile Include="XboxOverlay.cs" />
     <Compile Include="ControllerLabTheme.cs" />
+    <Compile Include="ProductExperience.cs" />
     <Compile Include="ControllerLab.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -83,6 +102,8 @@
     <None Include="app.manifest" />
     <None Include="build.ps1" />
     <None Include="README.md" />
+    <None Include="RUMBLE_TEST_NOTES.md" />
+    <None Include="DUALSENSE_ADVANCED_NOTES.md" />
     <Content Include="Tools\GenerateDualSenseRegions\generate_dualsense_regions.py" />
     <Content Include="Tools\GenerateDualSenseRegions\README.md" />
     <Content Include="Tools\GenerateXboxTopRegions\generate_xbox_top_regions.py" />

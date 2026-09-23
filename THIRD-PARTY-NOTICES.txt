@@ -1,0 +1,20 @@
+ControllerLab v1.0.0 third-party notices
+
+1. Microsoft .NET Framework 4.8 / Windows Presentation Foundation
+   The application targets the Microsoft .NET Framework 4.8 and uses the
+   Windows Presentation Foundation assemblies supplied by Windows and the
+   .NET Framework. These components are governed by Microsoft's applicable
+   license terms and are not redistributed in this package.
+
+2. Windows XInput and HID APIs
+   Input and device access use Windows XInput, Raw Input and HID APIs. These
+   APIs are provided by Windows and are not redistributed in this package.
+
+3. Visual assets
+   Controller images, masks and related visual assets are included for the
+   current application build. Visual assets licensing requires confirmation
+   before public redistribution. Do not assume that controller product marks,
+   images or masks are available for commercial reuse.
+
+No NuGet packages or other third-party binary dependencies are included in the
+v1.0.0 release candidate package.

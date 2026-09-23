@@ -1,0 +1,74 @@
+# ControllerLab 当前状态
+
+> 当前版本：**ControllerLab v1.0.0 Release Candidate 1**（程序集 / 文件版本 1.0.0.0）。软件闭环和发布候选包已完成；真实 Xbox 与 DualSense USB / 蓝牙验收仍是正式 Stable 标签前的阻塞项。
+
+> 2026-09-20：修复并重新部署长期运行闪退版本。旧版 `ControllerLab.exe` 会在 WPF `DispatcherTimer -> SetTimer` 路径耗尽 Window Manager timer handles；当前源码使用受显示刷新率约束的 `CompositionTarget.Rendering`，已从当前源码重新生成 Release EXE。默认 EXE 已更新，旧版保留为同目录 `ControllerLab_legacy_20260920-201913.exe` 回退副本。已完成自动自检和 25 秒运行句柄趋势检查；数小时真实手柄耐久验证仍待完成。
+
+> 2026-07-31：DualSense 高级检测软件实现完成。第 4 页现在分为触摸板、陀螺仪、灯带与电量、自适应扳机；新增双指有界轨迹、固定网格覆盖、五步检测、三轴双向响应诊断、原始/融合姿态切换和哈希设备校准。灯带实际 RGB 未解析，灯带与自适应扳机高级输出明确禁用。新增高级自检及全量回归通过；本环境没有真实 DualSense，USB / 蓝牙物理方向、噪声和高级输出均未实机验证。详见 `DUALSENSE_ADVANCED_NOTES.md`。
+
+> 2026-07-31：专业震动系统软件实现完成。现有 `IControllerRumbleService` 保留，新增统一能力模型、14 个数据化预设、独立 25 Hz 时间线播放器、原生 WPF 曲线编辑、设备哈希配置和感知校准。新增震动构造自检覆盖 12 类安全路径；本环境未连接真实 Xbox 或 DualSense，左右震感及 DualSense USB/蓝牙 HID 写入仍保持“已实现，待实机验证”。
+
+> 2026-07-31：摇杆专业检测完整软件模块已接入第 3 页，包含独立 Analyzer/ViewModel/Page、5 秒静止采样、72 区间圆周、左右四方向回中、三档死区与完整健康评分。新增算法自检及原有回归均通过；真实 Xbox/DualSense 机械表现仍待实机验证。详见 `JOYSTICK_PRO_TEST.md`。
+
+> 新任务开始时先读本文件，再读对应专题文档。状态以当前源码和可复现自检为准，不将动态演示或构造数据记为实机验证。
+
+## 当前稳定基线
+
+- **版本：** `v1.0.0`；发布状态：`v1.0.0-rc.1`。
+- **分支：** `agent/unify-ds5-visualizer-and-drift-test`。
+- **最近提交：** 以 `git log -1 --oneline` 为准；提交哈希不在本文重复维护，避免文档与 Git 历史漂移。
+- **构建：** Debug / Release 和发布目录版本均通过编译；完整自动自检通过。构建与发布证据见 `docs/TESTING.md`。
+- **UI 实现：** 原生、代码式 WPF；没有独立 XAML View / ViewModel 文件。
+
+## 已完成功能
+
+| 能力 | 当前状态 | 依据与边界 |
+| --- | --- | --- |
+| Xbox / XInput 设备发现与统一状态 | 已实现但待实机验证 | `InputManager`、`ControllerStateAdapter`、`ControllerDeviceManager`；有核心自检。 |
+| DualSense 原生 HID 发现与统一状态 | 已实现但待实机验证 | `SonyInputManager` 经 Raw Input 接收报告；有解析自检。 |
+| 多设备首页与切换 | 已实现但待实机验证 | `ControllerDeviceManager` 维护在线设备；切页不应重复启动输入线程。 |
+| Xbox 实时按键、十字键、摇杆、肩键与扳机可视化 | 已实现但待实机验证 | `ControllerVisual`、`XboxRegionManager` 和 `Assets/xboxRegions.json`；有 Overlay 自检。 |
+| DualSense 实时可视化 | 已实现但待实机验证 | `DualSenseVisual`、`DualSenseRegionManager`；有 Overlay 自检。 |
+| 按键测试 | 已实现但待实机验证 | 只应接受真实 `ControllerState.HasRealInput`。 |
+| 摇杆专业检测第一阶段：漂移、范围、稳定性、建议死区与实测记录 | 已实现但待实机验证 | `StickDriftAnalyzer`、`StickDriftTestEngine`、`StickTestEvidenceStore`；支持触碰无效判定、连续三轮、范围检查、JSON 结构记录和中文 TXT 报告。构造自检覆盖算法和临时目录写入，真实 Xbox / DualSense 记录仍待补。 |
+| LT / RT 历史曲线 | 已实现但待实机验证 | `TriggerTelemetryBuffer`；有自检。 |
+| DualSense 触摸板按压 | 已实现但待实机验证 | 由完整 HID 报告的按钮位驱动。 |
+| DualSense 最多两点触摸坐标 | 已实现但待实机验证 | USB 完整 `0x01` 与蓝牙完整 `0x31` 报告支持；紧凑兼容报告明确不可用。 |
+| DualSense 陀螺仪、加速度计与姿态显示 | 已实现但待实机验证 | `DualSenseMotionManager` / `MotionFusionService`；USB、蓝牙字段和 CRC 有构造自检。 |
+| DualSense 触摸板高级检测 | 已实现但待实机验证 | Contact ID 生命周期、双指独立轨迹、24×12 覆盖图、5 秒录制和五步引导；轨迹上限 1600 点。 |
+| DualSense 六轴诊断与设备校准 | 已实现但待实机验证 | 三轴正负响应、中断/跳变/冻结、Bias/Noise 和原始/融合姿态；配置保存到哈希设备文件。 |
+| DualSense 灯带 / 自适应扳机 | 未开放 | 实际 RGB 未解析；USB / 蓝牙高级输出未实机验证，接口与 UI 保持关闭且不发送报告。 |
+| Xbox 双电机震动 | 已实现但待实机验证 | `XInputRumbleService` 调用 `XInputSetState`；尚未记录本基线的实机结果。 |
+| DualSense 基础双通道震动 | 已实现但待实机验证 | USB `0x02` / 蓝牙 `0x31` 输出及 CRC 已实现；尚未实机确认。 |
+| 专业震动时间线、预设与校准 | 已实现但待实机验证 | `RumblePatternPlayer` 以 25 Hz 播放线性时间线；自定义预设、哈希设备配置、损坏恢复和停止路径有构造自检。 |
+
+## 当前正在开发
+
+- v1.0.0 软件范围已冻结。后续只处理真实 Xbox / XInput 与 DualSense USB / 蓝牙实机验证、兼容性修复和安全问题；未验证硬件能力保持“已实现但待实机验证”。
+
+## 已知问题与限制
+
+- 版本号已集中到 `BuildInfo.cs`、项目属性和发布文档；当前发布状态为 `v1.0.0-rc.1`。
+- 当前 UI 是大型代码式 WPF 组合，尚无独立 ViewModel 层；修改时必须谨慎处理 Dispatcher、事件订阅和页面离开清理。
+- Xbox / 第三方 XInput 手柄的电量、连接方式、震动能力取决于驱动和设备实现。
+- DualSense 完整 USB / 蓝牙 HID 报告才提供触点和运动数据；蓝牙紧凑兼容报告只提供基础输入。
+- DualSense USB / 蓝牙震动输出仅通过逻辑自检，必须在真实手柄上分别验证。
+- DualSense 触摸和运动布局有构造自检，但触摸物理方向、左倾/前倾显示方向、真实噪声阈值和电量枚举仍需 USB / 蓝牙实机确认。
+- 灯带与自适应扳机只有安全关闭接口和禁用 UI，占位不代表输出已实现。
+- 震动与漂移、陀螺仪静止校准及完整检测静止采样均已在运行时互斥；仍需真实设备验证物理震动停止时序。
+- Overlay 默认资源和用户校准 override 必须保持兼容；不可通过普通布局偏移修补已校准区域。
+
+## 下一步（发布候选阻塞项）
+
+1. 对 Xbox 与 DualSense 分别完成 USB / 蓝牙（适用时）的实机输入、断开重连与震动安全停止验证。
+2. 以真实手柄数据复核摇杆漂移、范围与扳机曲线的报告阈值。
+3. 为触摸、运动和震动的连接模式能力建立可追溯回归记录。
+
+## 最近更新
+
+| 日期 | 改动 | 验证 |
+| --- | --- | --- |
+| 2026-07-31 | 完成 DualSense 高级检测：双指轨迹/覆盖、五步触摸流程、六轴诊断、设备校准和四分区页面。 | `ControllerLab_DualSenseAdvanced_Test.exe` 构建成功；15 项全量自检通过。当前系统未连接 DualSense，实机项目全部保持待验证。 |
+| 2026-07-31 | 完成摇杆专业检测第一阶段的软件闭环：真实输入门控、连续静止检测、触碰无效判定、范围检查、中文报告与本地 JSON/TXT 实测记录。 | `ControllerLab_StickPhase1.exe` 构建成功；12 项自动自检通过，包含临时目录中 JSON/TXT 记录写入。未接入真实 Xbox / DualSense，不能宣称实机验证完成。 |
+| 2026-07-31 | 完成专业震动系统：能力模型、数据化预设、25 Hz 播放器、时间线编辑、设备校准与配置。 | 构建与震动专业自检通过；真实 Xbox 左右通道、DualSense USB/蓝牙仍待实机。 |
+| 2026-07-31 | 完成 v1.0.0 Release Candidate 收尾：版本集中管理、隐私文案、统一状态、发布文档、许可证和 Windows x64 发布包。 | Debug / Release、发布目录启动验证和自动自检通过；真实硬件仍待验收，暂不创建 Stable 标签。 |

@@ -4,13 +4,18 @@
 .vs/
 [Dd]ebug/
 [Rr]elease/
+[Pp]ublish/
+[Tt]est[Rr]esults/
 
 # Local build artifacts and diagnostics
 *.exe
 *.dll
 *.pdb
+*.zip
 *.cache
 *.tmp
+*.log
+*.bak
 *.user
 *.suo
 *.userosscache
@@ -20,6 +25,13 @@
 logs/
 crash.log
 *.override.json
+health-reports/
+stick-test-records/
+rumble/
+DualSense/
+XboxControllerLab/
+settings.ini
+*.settings.json
 
 # Generated visual audit output
 audit/

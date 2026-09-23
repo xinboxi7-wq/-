@@ -1,28 +1,16 @@
-# ControllerLab v1.0.2
+# ControllerLab v1.0.0 Release Candidate 1
 
-## 最新运行截图更新
+发布日期：2026-07-31
 
-- README 的 Xbox 实时可视化图替换为当前运行版本截图，包含最新的 LT/RT 历史曲线和诊断面板。
-- 保留 DualSense / DS5 实时可视化截图。
+这是 ControllerLab v1.0.0 的第一个发布候选版本。软件闭环、报告、设置、震动安全停止和原生 WPF 产品界面已完成，自动化自检通过。
 
-## 源码发布内容
+发布候选版本仍需要真实设备验收：
 
-ControllerLab v1.0.1 提供 Windows WPF 手柄检测与可视化的完整 Visual Studio 工程源码。
+- Xbox / XInput 输入、左右震动和断开重连。
+- DualSense USB 输入、触摸、体感和基础震动。
+- DualSense 蓝牙输入、触摸、体感和基础震动。
+- 不同第三方手柄的输入范围、连接方式和安全停止时序。
 
-### 包含内容
+DualSense 高级触觉、自适应扳机和灯带输出保持禁用，不会被宣传为已支持能力。视觉素材公开再分发许可也需要确认，详见 `THIRD-PARTY-NOTICES.txt`。
 
-- Xbox XInput 与 DualSense 原生 HID 设备统一管理。
-- 多设备首页、实时可视化、按键测试、摇杆漂移/范围检测和扳机历史曲线。
-- Xbox 与 DualSense 专属视觉层，以及区域配置与校准 override 支持。
-- 所有 C#、项目文件、资源、离线区域工具和文档截图。
-
-### 不包含内容
-
-- `bin/`、`obj/`、`.vs/`、历史测试 EXE、临时审计截图和旧发布包。
-- 个人本地校准 override、日志、设备数据或其他本机状态。
-
-### 已知限制
-
-- 电量、连接方式、触摸坐标和运动传感器能力受设备、驱动与 USB/蓝牙报告类型影响。
-- DualSense 的高级能力仅在真实 HID 报告包含对应字段时启用；不会通过模拟数据伪造检测结论。
-- 本 Release 是源码发布。请按 README 中的编译说明生成本机可执行文件。
+构建目标：Windows x64 / .NET Framework 4.8；发布目录：`release/ControllerLab-v1.0.0-win-x64/`。
